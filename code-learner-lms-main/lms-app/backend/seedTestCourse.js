@@ -116,6 +116,9 @@ async function run() {
 }
 
 run().catch(err => {
-  console.error('Seeding failed:', err.response?.data?.error || err.message);
+  console.error('Seeding failed:', err.response?.data?.error || err.message || err);
+  if (err.code === 'ECONNREFUSED') {
+    console.error('  → Make sure the backend is running: node src/server.js');
+  }
   process.exit(1);
 });
