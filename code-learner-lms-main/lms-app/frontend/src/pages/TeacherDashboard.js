@@ -132,6 +132,7 @@ const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
   { value: 'csharp',     label: 'C#' },
   { value: 'ruby',       label: 'Ruby' },
+  { value: 'sql',        label: 'SQL' },
 ];
 
 const PLACEHOLDERS = {
@@ -143,6 +144,7 @@ const PLACEHOLDERS = {
   javascript: '// JavaScript starter\nfunction solution() {\n    // your code here\n}\n\nsolution();',
   csharp:     'using System;\n\nclass Solution {\n    static void Main() {\n        // your code here\n    }\n}',
   ruby:       '# Ruby starter\ndef solution\n  # your code here\nend\n\nsolution',
+  sql:        '-- SQL starter\nSELECT * FROM table_name\nWHERE condition;',
 };
 
 const QuestionCard = ({ q, index, onUpdate, onToggleVisibility }) => {

@@ -39,6 +39,7 @@ const JUDGE0_LANG = {
   java:       62,   // Java (OpenJDK 13.0.1)
   csharp:     51,   // C# (Mono 6.6.0)
   ruby:       72,   // Ruby 2.7.0
+  sql:        82,   // SQLite (3.27.2)
 };
 
 // ── MIPS execution via local SPIM ──

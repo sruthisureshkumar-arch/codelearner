@@ -25,6 +25,7 @@ const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
   { value: 'csharp',     label: 'C#' },
   { value: 'ruby',       label: 'Ruby' },
+  { value: 'sql',        label: 'SQL' },
 ];
 
 const LANG_LABEL = Object.fromEntries(LANGUAGES.map(l => [l.value, l.label]));
