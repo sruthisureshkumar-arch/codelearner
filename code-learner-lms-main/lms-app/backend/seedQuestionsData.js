@@ -458,6 +458,155 @@ puts s.length`,
 # print the length of s`,
     isAnswerVisible: false,
   },
+
+  /* ───────────── SQL ───────────── */
+  {
+    title: 'SQL: Select all students',
+    description: 'A table called `students` has columns `id` (INTEGER) and `name` (TEXT). Write a query to select all rows, ordered by id.',
+    difficulty: 'easy',
+    language: 'sql',
+    testCases: [
+      {
+        label: 'All rows ordered by id',
+        input: '',
+        expectedOutput: '1|Alice\n2|Bob\n3|Carol',
+        isHidden: false,
+      },
+    ],
+    answer:
+`CREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO students VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Carol');
+
+SELECT id, name FROM students ORDER BY id;`,
+    placeholderCode:
+`CREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO students VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Carol');
+
+-- Write your SELECT query here:
+`,
+    isAnswerVisible: true,
+  },
+  {
+    title: 'SQL: Filter with WHERE (projection)',
+    description: 'A table `employees` has columns `id`, `name`, and `department`. Select only the `name` column for employees in the "Engineering" department, ordered alphabetically.',
+    difficulty: 'easy',
+    language: 'sql',
+    testCases: [
+      {
+        label: 'Engineering employees',
+        input: '',
+        expectedOutput: 'Alice\nCarol',
+        isHidden: false,
+      },
+    ],
+    answer:
+`CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT, department TEXT);
+INSERT INTO employees VALUES
+  (1, 'Alice',  'Engineering'),
+  (2, 'Bob',    'Marketing'),
+  (3, 'Carol',  'Engineering'),
+  (4, 'David',  'HR');
+
+SELECT name FROM employees WHERE department = 'Engineering' ORDER BY name;`,
+    placeholderCode:
+`CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT, department TEXT);
+INSERT INTO employees VALUES
+  (1, 'Alice',  'Engineering'),
+  (2, 'Bob',    'Marketing'),
+  (3, 'Carol',  'Engineering'),
+  (4, 'David',  'HR');
+
+-- Select only names from Engineering, ordered alphabetically:
+`,
+    isAnswerVisible: false,
+  },
+  {
+    title: 'SQL: JOIN two tables',
+    description: 'Tables `orders` (id, customer_id, amount) and `customers` (id, name) are provided. Write a query to return each customer\'s name and their order amount, ordered by order id.',
+    difficulty: 'medium',
+    language: 'sql',
+    testCases: [
+      {
+        label: 'Joined result',
+        input: '',
+        expectedOutput: 'Alice|150\nBob|200\nAlice|90',
+        isHidden: false,
+      },
+    ],
+    answer:
+`CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO customers VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount INTEGER);
+INSERT INTO orders VALUES (1, 1, 150), (2, 2, 200), (3, 1, 90);
+
+SELECT c.name, o.amount
+FROM orders o
+JOIN customers c ON o.customer_id = c.id
+ORDER BY o.id;`,
+    placeholderCode:
+`CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO customers VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount INTEGER);
+INSERT INTO orders VALUES (1, 1, 150), (2, 2, 200), (3, 1, 90);
+
+-- Join orders with customers and select name, amount ordered by order id:
+`,
+    isAnswerVisible: false,
+  },
+  {
+    title: 'SQL: CASCADE delete',
+    description: 'Create a `departments` table and an `employees` table with a foreign key that cascades on delete. After deleting the "Engineering" department, query remaining employees.',
+    difficulty: 'hard',
+    language: 'sql',
+    testCases: [
+      {
+        label: 'Employees after cascade delete',
+        input: '',
+        expectedOutput: 'Bob|Marketing\nDavid|HR',
+        isHidden: false,
+      },
+    ],
+    answer:
+`PRAGMA foreign_keys = ON;
+
+CREATE TABLE departments (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO departments VALUES (1, 'Engineering'), (2, 'Marketing'), (3, 'HR');
+
+CREATE TABLE employees (
+  id INTEGER PRIMARY KEY,
+  name TEXT,
+  dept_id INTEGER,
+  FOREIGN KEY (dept_id) REFERENCES departments(id) ON DELETE CASCADE
+);
+INSERT INTO employees VALUES
+  (1, 'Alice', 1),
+  (2, 'Bob',   2),
+  (3, 'Carol', 1),
+  (4, 'David', 3);
+
+DELETE FROM departments WHERE name = 'Engineering';
+
+SELECT e.name, d.name
+FROM employees e
+JOIN departments d ON e.dept_id = d.id
+ORDER BY e.id;`,
+    placeholderCode:
+`PRAGMA foreign_keys = ON;
+
+-- Create departments table:
+
+-- Create employees table with CASCADE foreign key:
+
+-- Insert sample data:
+
+-- Delete the Engineering department:
+
+-- Select remaining employees with their department name:
+`,
+    isAnswerVisible: false,
+  },
 ];
 
 module.exports = questions;
