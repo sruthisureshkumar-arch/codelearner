@@ -1,6 +1,9 @@
 const Course      = require('../models/Course');
 const Enrollment  = require('../models/Enrollment');
 const User        = require('../models/User');
+const Question    = require('../models/Question');
+const Submission  = require('../models/Submission');
+const Grade       = require('../models/Grade');
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I to avoid confusion
 
@@ -160,6 +163,36 @@ exports.verifyCourseAccess = async (req, res) => {
     res.json({ ok: true, course: { code: course.code, name: course.name, description: course.description } });
   } catch (err) {
     console.error('verifyCourseAccess error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// DELETE /api/courses/:code  (teacher) — delete a course and all its data
+exports.deleteCourse = async (req, res) => {
+  try {
+    const code = req.params.code.toUpperCase();
+    const course = await Course.findOne({ code });
+    if (!course) return res.status(404).json({ error: 'Course not found.' });
+    if (course.createdBy !== req.user.username) {
+      return res.status(403).json({ error: 'You can only delete your own courses.' });
+    }
+
+    // Delete everything associated with this course
+    const questions = await Question.find({ courseId: code }, '_id');
+    const questionIds = questions.map(q => q._id);
+
+    await Promise.all([
+      Course.deleteOne({ code }),
+      Enrollment.deleteMany({ courseCode: code }),
+      Question.deleteMany({ courseId: code }),
+      Submission.deleteMany({ courseId: code }),
+      Submission.deleteMany({ questionId: { $in: questionIds } }),
+      Grade.deleteMany({ courseId: code }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('deleteCourse error:', err);
     res.status(500).json({ error: err.message });
   }
 };

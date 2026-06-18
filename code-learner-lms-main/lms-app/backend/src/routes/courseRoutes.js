@@ -18,4 +18,7 @@ router.get('/enrolled', authenticate, requireRole('student'), courseController.g
 // Student: re-verify roll number + password before opening a course's materials
 router.post('/verify', authenticate, requireRole('student'), courseController.verifyCourseAccess);
 
+// Teacher: delete a course and all its data
+router.delete('/:code', authenticate, requireRole('teacher'), courseController.deleteCourse);
+
 module.exports = router;

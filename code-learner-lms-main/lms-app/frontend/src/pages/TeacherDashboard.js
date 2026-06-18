@@ -560,11 +560,25 @@ const PlagiarismView = ({ courseId }) => {
 
 /* ── My Courses view (create + list) ── */
 const CoursesView = ({ courses, activeCourseCode, onSwitchCourse, onCoursesChanged, onOpenCourse }) => {
-  const [form, setForm]       = useState({ name: '', description: '', password: '', code: '' });
+  const [form, setForm]         = useState({ name: '', description: '', password: '', code: '' });
   const [creating, setCreating] = useState(false);
-  const [error, setError]     = useState('');
-  const [created, setCreated] = useState(null);
+  const [error, setError]       = useState('');
+  const [created, setCreated]   = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [deleting, setDeleting] = useState(null); // course code being deleted
+
+  const handleDelete = async (code, name) => {
+    if (!window.confirm(`Delete "${name}"?\n\nThis will permanently remove the course, all its questions, enrollments, submissions and grades. This cannot be undone.`)) return;
+    setDeleting(code);
+    try {
+      await axios.delete(`/api/courses/${code}`);
+      onCoursesChanged();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not delete course.');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -669,11 +683,18 @@ const CoursesView = ({ courses, activeCourseCode, onSwitchCourse, onCoursesChang
                 <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
                   {c.studentCount} student{c.studentCount !== 1 ? 's' : ''} enrolled
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {activeCourseCode !== c.code && (
                     <button onClick={(e) => { e.stopPropagation(); onSwitchCourse(c.code); }} style={{ ...s.btnGray, flex: 1 }}>Set active</button>
                   )}
                   <button onClick={(e) => { e.stopPropagation(); onOpenCourse(c.code); }} style={{ ...s.btnBlue, flex: 1 }}>Open course →</button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(c.code, c.name); }}
+                    disabled={deleting === c.code}
+                    style={{ ...s.btnGray, flex: 1, background: '#fff', color: '#dc3545', border: '1px solid #dc3545' }}
+                  >
+                    {deleting === c.code ? 'Deleting…' : 'Delete'}
+                  </button>
                 </div>
               </div>
             </div>
