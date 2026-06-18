@@ -534,54 +534,51 @@ ORDER BY o.id;`,
   },
   {
     title: 'SQL: CASCADE delete',
-    description: 'Create a `departments` table and an `employees` table with a foreign key that cascades on delete. After deleting the "Engineering" department, query remaining employees.',
+    description: `The \`departments\` table is already created and populated for you.
+
+Your job:
+1. Create the \`employees\` table with columns: id (INTEGER PRIMARY KEY), name (TEXT), dept_id (INTEGER), and a FOREIGN KEY on dept_id referencing departments(id) ON DELETE CASCADE.
+2. Enable foreign key enforcement with: PRAGMA foreign_keys = ON;
+
+The system will then insert employees, delete the Engineering department, and check that the cascade removed Alice and Carol automatically.`,
     difficulty: 'hard',
     language: 'sql',
     testCases: [
       {
         label: 'Employees after cascade delete',
-        input: '',
+        // Prepended before student code: departments table + data
+        input:
+`PRAGMA foreign_keys = ON;
+CREATE TABLE departments (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO departments VALUES (1, 'Engineering'), (2, 'Marketing'), (3, 'HR');`,
+        // Appended after student code: fixed inserts + delete + select
+        appendSql:
+`INSERT INTO employees VALUES (1,'Alice',1),(2,'Bob',2),(3,'Carol',1),(4,'David',3);
+DELETE FROM departments WHERE name = 'Engineering';
+SELECT e.name, d.name FROM employees e JOIN departments d ON e.dept_id = d.id ORDER BY e.id;`,
         expectedOutput: 'Bob|Marketing\nDavid|HR',
         isHidden: false,
       },
     ],
     answer:
-`PRAGMA foreign_keys = ON;
-
-CREATE TABLE departments (id INTEGER PRIMARY KEY, name TEXT);
-INSERT INTO departments VALUES (1, 'Engineering'), (2, 'Marketing'), (3, 'HR');
-
+`-- departments table is already set up for you.
+-- Just create the employees table with CASCADE FK:
 CREATE TABLE employees (
-  id INTEGER PRIMARY KEY,
-  name TEXT,
+  id      INTEGER PRIMARY KEY,
+  name    TEXT,
   dept_id INTEGER,
   FOREIGN KEY (dept_id) REFERENCES departments(id) ON DELETE CASCADE
-);
-INSERT INTO employees VALUES
-  (1, 'Alice', 1),
-  (2, 'Bob',   2),
-  (3, 'Carol', 1),
-  (4, 'David', 3);
-
-DELETE FROM departments WHERE name = 'Engineering';
-
-SELECT e.name, d.name
-FROM employees e
-JOIN departments d ON e.dept_id = d.id
-ORDER BY e.id;`,
+);`,
     placeholderCode:
-`PRAGMA foreign_keys = ON;
+`-- departments table is already set up for you.
+-- Create the employees table with a CASCADE foreign key on dept_id:
 
--- Create departments table:
-
--- Create employees table with CASCADE foreign key:
-
--- Insert sample data:
-
--- Delete the Engineering department:
-
--- Select remaining employees with their department name:
-`,
+CREATE TABLE employees (
+  id      INTEGER PRIMARY KEY,
+  name    TEXT,
+  dept_id INTEGER,
+  -- add your FOREIGN KEY constraint here
+);`,
     isAnswerVisible: false,
   },
 ];

@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const testCaseSchema = new mongoose.Schema({
   label: { type: String, default: '' },
-  input: { type: String, default: '' },
+  input: { type: String, default: '' },       // prepended before student code (SQL setup)
+  appendSql: { type: String, default: '' },   // appended after student code (SQL only)
   expectedOutput: { type: String, default: '' },
   isHidden: { type: Boolean, default: false },
 }, { _id: true });

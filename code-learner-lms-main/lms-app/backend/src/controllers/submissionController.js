@@ -99,7 +99,7 @@ function runMips(code, stdin = '') {
 }
 
 // Run code for a single test case via Judge0 (or SPIM for MIPS)
-async function runCode(language, code, stdin = '') {
+async function runCode(language, code, stdin = '', appendSql = '') {
   // MIPS → run locally via SPIM
   if (language === 'mips') {
     return runMips(code, stdin);
@@ -111,13 +111,18 @@ async function runCode(language, code, stdin = '') {
   }
 
   // SQLite (Judge0) ignores stdin — it only executes source_code.
-  // For SQL questions the test-case "input" field holds setup SQL
-  // (CREATE TABLE + INSERT statements). We prepend it to the student's
-  // query so the tables exist when their SELECT/DML runs.
+  // For SQL questions:
+  //   - testCase.input   → prepended before student code (e.g. CREATE TABLE + INSERT)
+  //   - testCase.appendSql → appended after student code (e.g. INSERT + DELETE + SELECT)
+  // This is passed in via the stdin/appendSql parameters.
   let sourceCode = code;
   let stdinValue = stdin || '';
-  if (language === 'sql' && stdinValue.trim()) {
-    sourceCode = stdinValue.trim() + '\n\n' + code;
+  if (language === 'sql') {
+    const parts = [];
+    if (stdinValue.trim()) parts.push(stdinValue.trim());
+    parts.push(code);
+    if (appendSql && appendSql.trim()) parts.push(appendSql.trim());
+    sourceCode = parts.join('\n\n');
     stdinValue = '';
   }
 
@@ -199,7 +204,7 @@ exports.submitCode = async (req, res) => {
       });
     } else {
       for (const tc of testCases) {
-        const { output, error } = await runCode(language, code, tc.input);
+        const { output, error } = await runCode(language, code, tc.input, tc.appendSql || '');
         if (error && !executionError) executionError = error;
         const actual = output || '';
         const expected = (tc.expectedOutput || '').trim();
