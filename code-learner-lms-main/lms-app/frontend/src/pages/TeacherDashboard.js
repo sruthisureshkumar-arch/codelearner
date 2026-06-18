@@ -75,8 +75,9 @@ const Sidebar = ({ active, setActive, activeCourse }) => {
 };
 
 /* ── Test-case editor (inline, per-question) ── */
-const TestCaseEditor = ({ cases, onChange }) => {
-  const add = () => onChange([...cases, { label: '', input: '', expectedOutput: '' }]);
+const TestCaseEditor = ({ cases, onChange, language }) => {
+  const isSql = language === 'sql';
+  const add = () => onChange([...cases, { label: '', input: '', appendSql: '', expectedOutput: '' }]);
   const remove = (i) => onChange(cases.filter((_, idx) => idx !== i));
   const update = (i, field, val) => {
     const next = cases.map((c, idx) => idx === i ? { ...c, [field]: val } : c);
@@ -95,26 +96,65 @@ const TestCaseEditor = ({ cases, onChange }) => {
             <label style={s.label}>Label <span style={{ color: '#888', fontWeight: 400 }}>(optional)</span></label>
             <input value={tc.label} onChange={e => update(i, 'label', e.target.value)} style={s.input} placeholder="e.g. Basic addition" />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+
+          {isSql ? (
+            // SQL layout: Setup SQL | Append SQL | Expected output (stacked)
             <div>
-              <label style={s.label}>Input</label>
-              <textarea
-                value={tc.input}
-                onChange={e => update(i, 'input', e.target.value)}
-                style={{ ...s.input, ...s.mono, height: 72, resize: 'vertical' }}
-                placeholder={"e.g.\n5\n3"}
-              />
+              <div style={{ marginBottom: 8 }}>
+                <label style={s.label}>
+                  Setup SQL <span style={{ color: '#888', fontWeight: 400 }}>(runs before student's code — CREATE TABLE, INSERT)</span>
+                </label>
+                <textarea
+                  value={tc.input}
+                  onChange={e => update(i, 'input', e.target.value)}
+                  style={{ ...s.input, ...s.mono, height: 90, resize: 'vertical' }}
+                  placeholder={"e.g.\nCREATE TABLE students (id INTEGER, name TEXT);\nINSERT INTO students VALUES (1,'Alice'),(2,'Bob');"}
+                />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <label style={s.label}>
+                  Append SQL <span style={{ color: '#888', fontWeight: 400 }}>(runs after student's code — INSERT test data, then SELECT to verify)</span>
+                </label>
+                <textarea
+                  value={tc.appendSql || ''}
+                  onChange={e => update(i, 'appendSql', e.target.value)}
+                  style={{ ...s.input, ...s.mono, height: 90, resize: 'vertical' }}
+                  placeholder={"e.g.\nINSERT INTO employees VALUES (1,'Alice',1),(2,'Bob',2);\nDELETE FROM departments WHERE name='Engineering';\nSELECT e.name, d.name FROM employees e JOIN departments d ON e.dept_id=d.id ORDER BY e.id;"}
+                />
+              </div>
+              <div>
+                <label style={s.label}>Expected output</label>
+                <textarea
+                  value={tc.expectedOutput}
+                  onChange={e => update(i, 'expectedOutput', e.target.value)}
+                  style={{ ...s.input, ...s.mono, height: 60, resize: 'vertical' }}
+                  placeholder={"e.g.\nBob|Marketing\nDavid|HR"}
+                />
+              </div>
             </div>
-            <div>
-              <label style={s.label}>Expected output</label>
-              <textarea
-                value={tc.expectedOutput}
-                onChange={e => update(i, 'expectedOutput', e.target.value)}
-                style={{ ...s.input, ...s.mono, height: 72, resize: 'vertical' }}
-                placeholder={"e.g.\n8"}
-              />
+          ) : (
+            // Default layout for all other languages
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={s.label}>Input</label>
+                <textarea
+                  value={tc.input}
+                  onChange={e => update(i, 'input', e.target.value)}
+                  style={{ ...s.input, ...s.mono, height: 72, resize: 'vertical' }}
+                  placeholder={"e.g.\n5\n3"}
+                />
+              </div>
+              <div>
+                <label style={s.label}>Expected output</label>
+                <textarea
+                  value={tc.expectedOutput}
+                  onChange={e => update(i, 'expectedOutput', e.target.value)}
+                  style={{ ...s.input, ...s.mono, height: 72, resize: 'vertical' }}
+                  placeholder={"e.g.\n8"}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ))}
       <button onClick={add} style={s.btnDash}>+ Add test case</button>
@@ -287,7 +327,7 @@ const QuestionCard = ({ q, index, onUpdate, onToggleVisibility }) => {
           <p style={{ fontSize: 13, color: '#666', marginTop: 0, marginBottom: 12 }}>
             Define inputs and expected outputs to verify student solutions.
           </p>
-          <TestCaseEditor cases={testCases} onChange={setTestCases} />
+          <TestCaseEditor cases={testCases} onChange={setTestCases} language={language} />
           {testCases.length > 0 && (
             <div style={{ marginTop: 14 }}>
               <button onClick={saveTestCases} disabled={saving} style={s.btnBlue}>{saving ? 'Saving…' : 'Save test cases'}</button>
