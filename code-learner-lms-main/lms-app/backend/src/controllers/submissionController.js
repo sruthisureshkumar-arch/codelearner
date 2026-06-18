@@ -109,11 +109,23 @@ async function runCode(language, code, stdin = '') {
   if (!langId) {
     return { output: null, error: `Language "${language}" is not supported.` };
   }
+
+  // SQLite (Judge0) ignores stdin — it only executes source_code.
+  // For SQL questions the test-case "input" field holds setup SQL
+  // (CREATE TABLE + INSERT statements). We prepend it to the student's
+  // query so the tables exist when their SELECT/DML runs.
+  let sourceCode = code;
+  let stdinValue = stdin || '';
+  if (language === 'sql' && stdinValue.trim()) {
+    sourceCode = stdinValue.trim() + '\n\n' + code;
+    stdinValue = '';
+  }
+
   try {
     const res = await axios.post(JUDGE0_URL, {
-      source_code: code,
+      source_code: sourceCode,
       language_id: langId,
-      stdin:       stdin || '',
+      stdin:       stdinValue,
       cpu_time_limit: 5,
       memory_limit:   128000,
     }, {

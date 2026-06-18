@@ -460,99 +460,76 @@ puts s.length`,
   },
 
   /* ───────────── SQL ───────────── */
+  // For SQL questions the test-case "input" field holds the setup SQL
+  // (CREATE TABLE + INSERT statements). The system prepends it to the
+  // student's query before sending to Judge0, so students only write
+  // the query — they don't need to re-create the tables themselves.
   {
     title: 'SQL: Select all students',
-    description: 'A table called `students` has columns `id` (INTEGER) and `name` (TEXT). Write a query to select all rows, ordered by id.',
+    description: 'The `students` table (columns: `id` INTEGER, `name` TEXT) is already set up for you. Write a query to select all rows ordered by id.',
     difficulty: 'easy',
     language: 'sql',
     testCases: [
       {
         label: 'All rows ordered by id',
-        input: '',
+        input:
+`CREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO students VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Carol');`,
         expectedOutput: '1|Alice\n2|Bob\n3|Carol',
         isHidden: false,
       },
     ],
-    answer:
-`CREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT);
-INSERT INTO students VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Carol');
-
-SELECT id, name FROM students ORDER BY id;`,
-    placeholderCode:
-`CREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT);
-INSERT INTO students VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Carol');
-
--- Write your SELECT query here:
-`,
+    answer: `SELECT id, name FROM students ORDER BY id;`,
+    placeholderCode: `-- Write your SELECT query here:\n`,
     isAnswerVisible: true,
   },
   {
     title: 'SQL: Filter with WHERE (projection)',
-    description: 'A table `employees` has columns `id`, `name`, and `department`. Select only the `name` column for employees in the "Engineering" department, ordered alphabetically.',
+    description: 'The `employees` table (columns: `id`, `name`, `department`) is already set up. Select only the `name` column for employees in the "Engineering" department, ordered alphabetically.',
     difficulty: 'easy',
     language: 'sql',
     testCases: [
       {
         label: 'Engineering employees',
-        input: '',
+        input:
+`CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT, department TEXT);
+INSERT INTO employees VALUES
+  (1, 'Alice',  'Engineering'),
+  (2, 'Bob',    'Marketing'),
+  (3, 'Carol',  'Engineering'),
+  (4, 'David',  'HR');`,
         expectedOutput: 'Alice\nCarol',
         isHidden: false,
       },
     ],
-    answer:
-`CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT, department TEXT);
-INSERT INTO employees VALUES
-  (1, 'Alice',  'Engineering'),
-  (2, 'Bob',    'Marketing'),
-  (3, 'Carol',  'Engineering'),
-  (4, 'David',  'HR');
-
-SELECT name FROM employees WHERE department = 'Engineering' ORDER BY name;`,
-    placeholderCode:
-`CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT, department TEXT);
-INSERT INTO employees VALUES
-  (1, 'Alice',  'Engineering'),
-  (2, 'Bob',    'Marketing'),
-  (3, 'Carol',  'Engineering'),
-  (4, 'David',  'HR');
-
--- Select only names from Engineering, ordered alphabetically:
-`,
+    answer: `SELECT name FROM employees WHERE department = 'Engineering' ORDER BY name;`,
+    placeholderCode: `-- Select only names from Engineering, ordered alphabetically:\n`,
     isAnswerVisible: false,
   },
   {
     title: 'SQL: JOIN two tables',
-    description: 'Tables `orders` (id, customer_id, amount) and `customers` (id, name) are provided. Write a query to return each customer\'s name and their order amount, ordered by order id.',
+    description: 'Two tables are set up: `customers` (id, name) and `orders` (id, customer_id, amount). Write a query to return each customer\'s name and their order amount, ordered by order id.',
     difficulty: 'medium',
     language: 'sql',
     testCases: [
       {
         label: 'Joined result',
-        input: '',
+        input:
+`CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);
+INSERT INTO customers VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount INTEGER);
+INSERT INTO orders VALUES (1, 1, 150), (2, 2, 200), (3, 1, 90);`,
         expectedOutput: 'Alice|150\nBob|200\nAlice|90',
         isHidden: false,
       },
     ],
     answer:
-`CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);
-INSERT INTO customers VALUES (1, 'Alice'), (2, 'Bob');
-
-CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount INTEGER);
-INSERT INTO orders VALUES (1, 1, 150), (2, 2, 200), (3, 1, 90);
-
-SELECT c.name, o.amount
+`SELECT c.name, o.amount
 FROM orders o
 JOIN customers c ON o.customer_id = c.id
 ORDER BY o.id;`,
-    placeholderCode:
-`CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);
-INSERT INTO customers VALUES (1, 'Alice'), (2, 'Bob');
-
-CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount INTEGER);
-INSERT INTO orders VALUES (1, 1, 150), (2, 2, 200), (3, 1, 90);
-
--- Join orders with customers and select name, amount ordered by order id:
-`,
+    placeholderCode: `-- Join orders with customers and return name, amount ordered by order id:\n`,
     isAnswerVisible: false,
   },
   {
