@@ -173,6 +173,7 @@ const LANGUAGES = [
   { value: 'csharp',     label: 'C#' },
   { value: 'ruby',       label: 'Ruby' },
   { value: 'sql',        label: 'SQL' },
+  { value: 'flex',       label: 'Flex/Lex' },
 ];
 
 const PLACEHOLDERS = {
@@ -185,6 +186,7 @@ const PLACEHOLDERS = {
   csharp:     'using System;\n\nclass Solution {\n    static void Main() {\n        // your code here\n    }\n}',
   ruby:       '# Ruby starter\ndef solution\n  # your code here\nend\n\nsolution',
   sql:        '-- SQL starter\nSELECT * FROM table_name\nWHERE condition;',
+  flex:       '%option noyywrap\n%%\n/* match pattern  { action } */\n[a-zA-Z]+  { printf("WORD: %s\\n", yytext); }\n[0-9]+     { printf("NUM: %s\\n", yytext); }\n\\n         { /* skip newlines */ }\n.          { /* skip other chars */ }\n%%\nint main() {\n    yylex();\n    return 0;\n}',
 };
 
 const QuestionCard = ({ q, index, onUpdate, onToggleVisibility }) => {
