@@ -1,4 +1,4 @@
-# CodeLearner LMS — Multi-Language Coding Assessment Platform
+# CodeLearner LMS - Multi-Language Coding Assessment Platform
 
 *Collaborative project — [Sruthi Sureshkumar](https://github.com/sruthisureshkumar-arch) & [Thaarini](https://github.com/thaarini18)*
 
