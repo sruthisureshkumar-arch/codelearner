@@ -98,11 +98,89 @@ function runMips(code, stdin = '') {
   });
 }
 
+// ── Flex/Lex execution via local flex + gcc ──
+function runFlex(code, stdin = '') {
+  return new Promise((resolve) => {
+    const tag = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const tmpDir  = path.join(os.tmpdir(), `flex_${tag}`);
+    const lexFile = path.join(tmpDir, 'program.l');
+    const cFile   = path.join(tmpDir, 'lex.yy.c');
+    const outFile = path.join(tmpDir, 'program');
+
+    const cleanup = () => { try { fs.rmSync(tmpDir, { recursive: true }); } catch (_) {} };
+
+    try { fs.mkdirSync(tmpDir, { recursive: true }); }
+    catch (e) { return resolve({ output: null, error: e.message }); }
+
+    fs.writeFileSync(lexFile, code);
+
+    // Step 1: flex → lex.yy.c
+    const flex = spawn('flex', ['-o', cFile, lexFile]);
+    let flexErr = '';
+    flex.stderr.on('data', d => { flexErr += d.toString(); });
+
+    flex.on('error', (err) => {
+      cleanup();
+      if (err.code === 'ENOENT') {
+        resolve({ output: null, error: 'flex is not installed. Run: brew install flex' });
+      } else {
+        resolve({ output: null, error: err.message });
+      }
+    });
+
+    flex.on('close', (flexCode) => {
+      if (flexCode !== 0) {
+        cleanup();
+        return resolve({ output: null, error: flexErr.trim() || 'flex: compilation error.' });
+      }
+
+      // Step 2: gcc lex.yy.c → binary  (%option noyywrap avoids needing -lfl)
+      const gcc = spawn('gcc', [cFile, '-o', outFile]);
+      let gccErr = '';
+      gcc.stderr.on('data', d => { gccErr += d.toString(); });
+
+      gcc.on('error', (err) => {
+        cleanup();
+        resolve({ output: null, error: err.code === 'ENOENT' ? 'gcc is not installed.' : err.message });
+      });
+
+      gcc.on('close', (gccCode) => {
+        if (gccCode !== 0) {
+          cleanup();
+          return resolve({ output: null, error: gccErr.trim() || 'gcc: compilation error.' });
+        }
+
+        // Step 3: run the binary
+        const proc = spawn(outFile, [], { timeout: 10000 });
+        let stdout = '', stderr = '';
+        proc.stdin.write(stdin || '');
+        proc.stdin.end();
+        proc.stdout.on('data', d => { stdout += d.toString(); });
+        proc.stderr.on('data', d => { stderr += d.toString(); });
+
+        proc.on('close', (_, signal) => {
+          cleanup();
+          if (signal) return resolve({ output: null, error: `Program timed out or was killed (${signal}).` });
+          if (stderr.trim()) return resolve({ output: stdout.trim() || null, error: stderr.trim() });
+          resolve({ output: stdout.trim(), error: null });
+        });
+
+        proc.on('error', (err) => { cleanup(); resolve({ output: null, error: err.message }); });
+      });
+    });
+  });
+}
+
 // Run code for a single test case via Judge0 (or SPIM for MIPS)
 async function runCode(language, code, stdin = '', appendSql = '') {
   // MIPS → run locally via SPIM
   if (language === 'mips') {
     return runMips(code, stdin);
+  }
+
+  // Flex/Lex → compile and run locally
+  if (language === 'flex') {
+    return runFlex(code, stdin);
   }
 
   const langId = JUDGE0_LANG[language];

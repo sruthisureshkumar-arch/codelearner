@@ -26,6 +26,7 @@ const LANGUAGES = [
   { value: 'csharp',     label: 'C#' },
   { value: 'ruby',       label: 'Ruby' },
   { value: 'sql',        label: 'SQL' },
+  { value: 'flex',       label: 'Flex/Lex' },
 ];
 
 const LANG_LABEL = Object.fromEntries(LANGUAGES.map(l => [l.value, l.label]));
@@ -39,6 +40,7 @@ const PLACEHOLDERS = {
   javascript: 'function solution() {\n    // your code here\n}\n\nsolution();',
   csharp:     'using System;\n\nclass Solution {\n    static void Main() {\n        // your code here\n    }\n}',
   ruby:       'def solution\n  # your code here\nend\n\nsolution',
+  flex:       '%option noyywrap\n%%\n/* match pattern  { action } */\n[a-zA-Z]+  { printf("WORD: %s\\n", yytext); }\n[0-9]+     { printf("NUM: %s\\n", yytext); }\n\\n         { /* skip newlines */ }\n.          { /* skip other chars */ }\n%%\nint main() {\n    yylex();\n    return 0;\n}',
 };
 
 const s = {
