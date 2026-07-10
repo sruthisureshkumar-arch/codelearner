@@ -20,6 +20,7 @@ const questionSchema = new mongoose.Schema(
     courseId: { type: String, required: true },
     createdBy: { type: String, required: true },
     difficulty: { type: String, enum: ['easy', 'medium', 'hard'], default: 'medium' },
+    hideTestCases: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

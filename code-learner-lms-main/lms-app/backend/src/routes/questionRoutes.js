@@ -21,6 +21,9 @@ router.post('/:id/answer', authenticate, requireRole('teacher'), questionControl
 // Update answer visibility (teacher only)
 router.patch('/:id/visibility', authenticate, requireRole('teacher'), questionController.updateAnswerVisibility);
 
+// Generate AI placeholder code (teacher only)
+router.post('/:id/generate-placeholder', authenticate, requireRole('teacher'), questionController.generatePlaceholder);
+
 // Delete question (teacher only)
 router.delete('/:id', authenticate, requireRole('teacher'), questionController.deleteQuestion);
 

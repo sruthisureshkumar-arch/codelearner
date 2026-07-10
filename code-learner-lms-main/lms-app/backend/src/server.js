@@ -9,6 +9,7 @@ const gradeRoutes       = require('./routes/gradeRoutes');
 const plagiarismRoutes  = require('./routes/plagiarismRoutes');
 const authRoutes        = require('./routes/authRoutes');
 const courseRoutes      = require('./routes/courseRoutes');
+const sessionRoutes     = require('./routes/sessionRoutes');
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/api/submissions', submissionRoutes);
 app.use('/api/grades',      gradeRoutes);
 app.use('/api/plagiarism',  plagiarismRoutes);
 app.use('/api/courses',     courseRoutes);
+app.use('/api/sessions',    sessionRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -44,7 +46,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
