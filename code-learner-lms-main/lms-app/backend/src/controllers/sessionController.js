@@ -110,7 +110,7 @@ exports.autoSubmit = async (req, res) => {
         studentUsername,
         rollNumber: '',
         language: q.language || 'c',
-        code: '',
+        code: '// Not attempted — session timed out.',
         testResults: (q.testCases || []).map(tc => ({
           label: tc.label || '',
           input: tc.input || '',

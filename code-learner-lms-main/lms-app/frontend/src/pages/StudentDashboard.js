@@ -176,7 +176,12 @@ const SessionExperience = ({ session, courseId, studentId, rollNumber, onExit })
   const [secsLeft, setSecsLeft]         = useState(session.isTimed ? (session.durationMinutes || 30) * 60 : null);
   const [submitted, setSubmitted]       = useState(false);
   const [submitting, setSubmitting]     = useState(false);
-  const timerRef = useRef(null);
+  const timerRef    = useRef(null);
+  // Use refs so doAutoSubmit never changes identity → timer never resets on submission
+  const attemptedRef  = useRef(attempted);
+  const submittedRef  = useRef(false);
+  const submittingRef = useRef(false);
+  attemptedRef.current = attempted; // keep ref in sync with state
 
   const attemptedCount = attempted.size;
   const progress = total > 0 ? (attemptedCount / total) * 100 : 0;
@@ -186,20 +191,22 @@ const SessionExperience = ({ session, courseId, studentId, rollNumber, onExit })
   }, []);
 
   const doAutoSubmit = useCallback(async () => {
-    if (submitted || submitting) return;
+    if (submittedRef.current || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await axios.post(`/api/sessions/${session._id}/auto-submit`, {
         studentId, courseId,
         rollNumber: rollNumber || '',
-        attempted: Array.from(attempted),
+        attempted: Array.from(attemptedRef.current),
       });
+      submittedRef.current = true;
       setSubmitted(true);
-    } catch(e) { console.error(e); setSubmitted(true); }
-    finally { setSubmitting(false); }
-  }, [session._id, studentId, courseId, rollNumber, attempted, submitted, submitting]);
+    } catch(e) { console.error(e); submittedRef.current = true; setSubmitted(true); }
+    finally { submittingRef.current = false; setSubmitting(false); }
+  }, [session._id, studentId, courseId, rollNumber]); // stable — no Set/boolean deps
 
-  // Countdown timer
+  // Countdown timer — depends only on secsLeft, not doAutoSubmit (stable ref)
   useEffect(() => {
     if (!session.isTimed || secsLeft === null) return;
     if (secsLeft <= 0) { doAutoSubmit(); return; }
@@ -239,7 +246,7 @@ const SessionExperience = ({ session, courseId, studentId, rollNumber, onExit })
   const q = questions[currentIdx];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 52px)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 104px)', margin: '-24px', background: '#f2f2f2' }}>
       {/* Progress bar */}
       <div style={{ height: 4, background: '#e9ecef', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ height: 4, width: `${progress}%`, background: '#0f6cbf', transition: 'width 0.4s ease' }} />
@@ -642,38 +649,34 @@ const StudentDashboard = ({ courseId = 'course-001', user, courses = [], activeC
   return (
     <div style={{ display: 'flex', minHeight: 'calc(100vh - 52px)', background: '#f2f2f2' }}>
       <Sidebar active={activeSection} setActive={setActiveSection} studentName={studentId} activeCourse={activeCourse} />
-      <div style={{ flex: 1, padding: activeSection === 'sessions' && !noActiveCourse && !isLocked ? 0 : 24, minWidth: 0 }}>
-        {activeSection !== 'sessions' && (
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
-            <span style={{ color: '#0f6cbf', cursor: 'pointer' }} onClick={() => setActiveSection('courses')}>Dashboard</span>
-            <span style={{ margin: '0 6px' }}>›</span>
-            <span style={{ color: '#0f6cbf', cursor: 'pointer' }} onClick={() => setActiveSection('courses')}>{activeCourse ? activeCourse.code : 'No courses yet'}</span>
-            <span style={{ margin: '0 6px' }}>›</span>
-            <span>{sectionLabels[activeSection]}</span>
-          </div>
-        )}
+      <div style={{ flex: 1, padding: 24, minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+          <span style={{ color: '#0f6cbf', cursor: 'pointer' }} onClick={() => setActiveSection('courses')}>Dashboard</span>
+          <span style={{ margin: '0 6px' }}>›</span>
+          <span style={{ color: '#0f6cbf', cursor: 'pointer' }} onClick={() => setActiveSection('courses')}>{activeCourse ? activeCourse.code : 'No courses yet'}</span>
+          <span style={{ margin: '0 6px' }}>›</span>
+          <span>{sectionLabels[activeSection] || 'Sessions'}</span>
+        </div>
 
         {['sessions','history','grades'].includes(activeSection) && noActiveCourse && (
-          <div style={{ padding: activeSection === 'sessions' ? 24 : 0 }}>
+          <>
             <h1 style={{ margin: '0 0 16px', fontSize: 22, fontWeight: 600, color: '#333' }}>{sectionLabels[activeSection]}</h1>
             <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 14, color: '#666', marginBottom: 16 }}>You haven't joined any courses yet.</div>
               <button onClick={() => setActiveSection('courses')} style={s.btnBlue}>Go to Dashboard</button>
             </div>
-          </div>
+          </>
         )}
 
         {['sessions','history','grades'].includes(activeSection) && !noActiveCourse && isLocked && (
-          <div style={{ padding: activeSection === 'sessions' ? 24 : 0 }}>
+          <>
             <h1 style={{ margin: '0 0 16px', fontSize: 22, fontWeight: 600, color: '#333' }}>{sectionLabels[activeSection]}</h1>
             <CourseAccessGate course={activeCourse} defaultRollNumber={activeCourse.rollNumber || user?.rollNumber || ''} onUnlock={handleUnlock} />
-          </div>
+          </>
         )}
 
         {activeSection === 'sessions' && !noActiveCourse && !isLocked && (
-          <div style={{ padding: 0 }}>
-            <StudentSessionsView courseId={courseId} studentId={studentId} rollNumber={activeCourse?.rollNumber || user?.rollNumber || ''} />
-          </div>
+          <StudentSessionsView courseId={courseId} studentId={studentId} rollNumber={activeCourse?.rollNumber || user?.rollNumber || ''} />
         )}
 
         {activeSection === 'history' && !noActiveCourse && !isLocked && (
