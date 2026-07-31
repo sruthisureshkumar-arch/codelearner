@@ -6,6 +6,10 @@ const { authenticate, requireRole } = require('../middleware/auth');
 // Get all questions for a course (any logged-in user)
 router.get('/course/:courseId', authenticate, questionController.getQuestions);
 
+// Question pool
+router.get('/pool/:courseId',  authenticate, requireRole('teacher'), questionController.getPoolQuestions);
+router.post('/pool',           authenticate, requireRole('teacher'), questionController.createPoolQuestion);
+
 // Get single question (any logged-in user)
 router.get('/:id', authenticate, questionController.getQuestion);
 

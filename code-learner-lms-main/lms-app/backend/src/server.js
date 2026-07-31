@@ -15,14 +15,15 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '200kb' }));           // cap request size
+app.use(bodyParser.urlencoded({ extended: true, limit: '200kb' }));
 
 // MongoDB Connection
 mongoose
   .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
+    maxPoolSize: 20,   // support PM2 cluster mode (5 per process × 4 cores)
   })
   .then(() => {
     console.log('Connected to MongoDB');

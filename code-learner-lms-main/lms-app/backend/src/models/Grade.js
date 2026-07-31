@@ -10,6 +10,7 @@ const gradeEntrySchema = new mongoose.Schema({
 
 const gradeSchema = new mongoose.Schema({
   studentId:  { type: String, required: true },
+  rollNumber: { type: String, default: '' },
   courseId:   { type: String, required: true },
   grades:     { type: [gradeEntrySchema], default: [] },
   totalScore: { type: Number, default: 0 },

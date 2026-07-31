@@ -7,7 +7,7 @@ const sessionSchema = new mongoose.Schema({
   createdBy:             { type: String, required: true },
   isTimed:               { type: Boolean, default: false },
   durationMinutes:       { type: Number, default: 30 },
-  allowMultipleAttempts: { type: Boolean, default: true },
+  isActive:              { type: Boolean, default: false },
   questions:             [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }],
 }, { timestamps: true });
 

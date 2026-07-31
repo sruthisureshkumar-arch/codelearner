@@ -54,29 +54,51 @@ const PLACEHOLDERS = {
   flex:       '%option noyywrap\n%%\n/* match pattern  { action } */\n[a-zA-Z]+  { printf("WORD: %s\\n", yytext); }\n[0-9]+     { printf("NUM: %s\\n", yytext); }\n\\n         { /* skip newlines */ }\n.          { /* skip other chars */ }\n%%\nint main() {\n    yylex();\n    return 0;\n}',
 };
 
+/* ── Roll number sort (mirrors backend) ── */
+function compareRollNumbers(a = '', b = '') {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  const chunk = s => String(s).match(/\d+|\D+/g) || [];
+  const ca = chunk(a), cb = chunk(b);
+  for (let i = 0; i < Math.max(ca.length, cb.length); i++) {
+    const x = ca[i] || '', y = cb[i] || '';
+    if (x === y) continue;
+    const xNum = /^\d+$/.test(x), yNum = /^\d+$/.test(y);
+    if (xNum && yNum) { const d = Number(x) - Number(y); if (d !== 0) return d; }
+    else return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
 /* ── Sidebar ── */
 const Sidebar = ({ active, setActive, activeCourse }) => {
   const items = [
-    { id: 'sessions',    label: 'Sessions',          icon: '📚' },
-    { id: 'grades',      label: 'Gradebook',          icon: '📊' },
-    { id: 'plagiarism',  label: 'Plagiarism check',   icon: '🔍' },
-    { id: 'courses',     label: 'My courses',          icon: '🏫' },
+    { id: 'sessions',    label: 'Sessions',          icon: '📚', requiresCourse: true },
+    { id: 'pool',        label: 'Question pool',      icon: '📦', requiresCourse: true },
+    { id: 'grades',      label: 'Gradebook',          icon: '📊', requiresCourse: true },
+    { id: 'plagiarism',  label: 'Plagiarism check',   icon: '🔍', requiresCourse: true },
+    { id: 'courses',     label: 'My courses',          icon: '🏫', requiresCourse: false },
   ];
   return (
     <div style={{ width: 220, background: '#fff', borderRight: '1px solid #dee2e6', minHeight: 'calc(100vh - 52px)', flexShrink: 0 }}>
       <div style={{ padding: '16px 16px 8px', fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.8 }}>Navigation</div>
-      {items.map(item => (
-        <button key={item.id} onClick={() => setActive(item.id)} style={{
-          display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px',
-          background: active === item.id ? '#e8f0fb' : 'transparent',
-          borderLeft: active === item.id ? '4px solid #0f6cbf' : '4px solid transparent',
-          border: 'none', cursor: 'pointer', fontSize: 14,
-          color: active === item.id ? '#0f6cbf' : '#333',
-          fontWeight: active === item.id ? 500 : 400, textAlign: 'left',
-        }}>
-          <span>{item.icon}</span>{item.label}
-        </button>
-      ))}
+      {items.map(item => {
+        const disabled = item.requiresCourse && !activeCourse;
+        return (
+          <button key={item.id} onClick={() => !disabled && setActive(item.id)} style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px',
+            background: active === item.id ? '#e8f0fb' : 'transparent',
+            borderLeft: active === item.id ? '4px solid #0f6cbf' : '4px solid transparent',
+            border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 14,
+            color: active === item.id ? '#0f6cbf' : '#333',
+            fontWeight: active === item.id ? 500 : 400, textAlign: 'left',
+            opacity: disabled ? 0.38 : 1,
+          }}>
+            <span>{item.icon}</span>{item.label}
+          </button>
+        );
+      })}
       <div style={{ margin: '12px 12px', borderTop: '1px solid #dee2e6' }} />
       <div style={{ padding: '6px 16px', fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.8 }}>Active course</div>
       <div style={{ padding: '8px 16px', fontSize: 13, color: '#555' }}>
@@ -234,6 +256,8 @@ const QuestionCard = ({ q, index, onUpdate, onToggleVisibility, onRemove, sessio
   const [editingAnswer, setEditingAnswer] = useState(false);
   const [answerDraft, setAnswerDraft]     = useState(q.answer || '');
   const [placeholder, setPlaceholder]    = useState(q.placeholderCode || '');
+  const [preCode, setPreCode]             = useState(q.driverPreCode  || '');
+  const [postCode, setPostCode]           = useState(q.driverPostCode || '');
   const [language, setLanguage]           = useState(q.language || 'mips');
   const [testCases, setTestCases]         = useState(q.testCases || []);
   const [hideTests, setHideTests]         = useState(!!q.hideTestCases);
@@ -253,7 +277,7 @@ const QuestionCard = ({ q, index, onUpdate, onToggleVisibility, onRemove, sessio
   const savePlaceholder = async () => {
     setSaving(true);
     try {
-      const res = await axios.put(`/api/questions/${q._id}`, { placeholderCode: placeholder, language });
+      const res = await axios.put(`/api/questions/${q._id}`, { placeholderCode: placeholder, driverPreCode: preCode, driverPostCode: postCode, language });
       onUpdate({ ...q, ...res.data });
     } catch(e){ console.error(e); } finally { setSaving(false); }
   };
@@ -270,10 +294,15 @@ const QuestionCard = ({ q, index, onUpdate, onToggleVisibility, onRemove, sessio
     setAiLoading(true);
     try {
       const res = await axios.post(`/api/questions/${q._id}/generate-placeholder`, { language });
-      const generated = res.data?.placeholderCode || '';
-      setPlaceholder(generated);
-      onUpdate({ ...q, placeholderCode: generated, language });
-    } catch(e){ console.error(e); alert('AI generation failed.'); } finally { setAiLoading(false); }
+      const { driverPreCode: pre = '', placeholderCode: ph = '', driverPostCode: post = '', usedFallback } = res.data;
+      setPreCode(pre);
+      setPlaceholder(ph);
+      setPostCode(post);
+      onUpdate({ ...q, driverPreCode: pre, placeholderCode: ph, driverPostCode: post, language });
+      if (usedFallback) {
+        alert('Ollama is not running — inserted a starter template instead.\n\nTo enable AI generation: run "ollama serve" in your terminal, then make sure the model is pulled:\n  ollama pull qwen2.5-coder:1.5b');
+      }
+    } catch(e){ console.error(e); alert('AI generation failed: ' + (e.response?.data?.error || e.message)); } finally { setAiLoading(false); }
   };
 
   const tabBtn = (id, label) => (
@@ -336,22 +365,44 @@ const QuestionCard = ({ q, index, onUpdate, onToggleVisibility, onRemove, sessio
 
       {tab === 'placeholder' && (
         <div style={s.section}>
-          <div style={s.sHead}>Starter / placeholder code</div>
-          <div style={{ marginBottom: 12 }}>
+          <div style={s.sHead}>Driver code &amp; starter code</div>
+
+          {/* Language selector */}
+          <div style={{ marginBottom: 14 }}>
             <label style={s.label}>Programming language</label>
             <select value={language} onChange={e => { setLanguage(e.target.value); if (!placeholder.trim()) setPlaceholder(PLACEHOLDERS[e.target.value] || ''); }} style={{ ...s.input, width: 220 }}>
               {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </div>
+
+          {/* How it works note */}
+          <div style={{ background: '#f0f4ff', border: '1px solid #c5d5f5', borderRadius: 4, padding: '8px 12px', fontSize: 12, color: '#555', marginBottom: 14 }}>
+            💡 Students see a split editor — <strong>Pre-code</strong> and <strong>Post-code</strong> are locked (like LeetCode driver code). Only the <strong>Student code</strong> section is editable.
+          </div>
+
+          {/* Pre-code (locked) */}
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ ...s.label, color: '#666' }}>🔒 Pre-code <span style={{ fontWeight: 400, color: '#888' }}>(locked — shown above student's editor)</span></label>
+            <textarea value={preCode} onChange={e => setPreCode(e.target.value)} style={{ ...s.input, ...s.mono, height: 100, resize: 'vertical', background: '#f0f0f0', color: '#555' }} placeholder={`e.g. #include <stdio.h>\nint main() {\n    int a, b;\n    scanf("%d %d", &a, &b);`} />
+          </div>
+
+          {/* Student placeholder code */}
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-              <label style={{ ...s.label, marginBottom: 0 }}>Placeholder code</label>
+              <label style={{ ...s.label, marginBottom: 0 }}>✏️ Student code <span style={{ fontWeight: 400, color: '#888' }}>(editable — student's starting point)</span></label>
               <button onClick={generateAI} disabled={aiLoading} style={{ ...s.btnGray, padding: '4px 10px', fontSize: 12 }}>
                 {aiLoading ? '⏳ Generating…' : '✨ Generate with AI'}
               </button>
             </div>
-            <textarea value={placeholder} onChange={e => setPlaceholder(e.target.value)} style={{ ...s.input, ...s.mono, height: 180, resize: 'vertical' }} placeholder={PLACEHOLDERS[language] || '// starter code'} />
+            <textarea value={placeholder} onChange={e => setPlaceholder(e.target.value)} style={{ ...s.input, ...s.mono, height: 120, resize: 'vertical' }} placeholder={PLACEHOLDERS[language] || '// starter code'} />
           </div>
+
+          {/* Post-code (locked) */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ ...s.label, color: '#666' }}>🔒 Post-code <span style={{ fontWeight: 400, color: '#888' }}>(locked — shown below student's editor)</span></label>
+            <textarea value={postCode} onChange={e => setPostCode(e.target.value)} style={{ ...s.input, ...s.mono, height: 80, resize: 'vertical', background: '#f0f0f0', color: '#555' }} placeholder={`e.g.     return 0;\n}`} />
+          </div>
+
           <button onClick={savePlaceholder} disabled={saving} style={s.btnBlue}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       )}
@@ -396,55 +447,555 @@ const QuestionCard = ({ q, index, onUpdate, onToggleVisibility, onRemove, sessio
   );
 };
 
-/* ── Gradebook view ── */
-const GradebookView = ({ courseId }) => {
-  const [grades, setGrades]   = useState([]);
+/* ── Submission history drill-down modal ── */
+const SubmissionHistoryModal = ({ studentId, questionId, questionTitle, courseId, onClose }) => {
+  const [subs, setSubs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
-    axios.get(`/api/grades/course/${courseId}`).then(r => setGrades(r.data)).catch(console.error).finally(() => setLoading(false));
-  }, [courseId]);
-
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#666' }}>Loading gradebook…</div>;
-  if (!grades.length) return <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', padding: 40, textAlign: 'center', color: '#888' }}>No submissions yet.</div>;
+    axios.get(`/api/submissions/history`, { params: { studentId, questionId, courseId } })
+      .then(r => setSubs(r.data)).catch(console.error).finally(() => setLoading(false));
+  }, [studentId, questionId, courseId]);
 
   return (
-    <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', overflow: 'hidden' }}>
-      <div style={{ background: '#0f6cbf', padding: '14px 20px' }}>
-        <h2 style={{ margin: 0, color: '#fff', fontSize: 18, fontWeight: 600 }}>Gradebook — {courseId}</h2>
-      </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: '#f8f9fa' }}>
-            {['Student','Questions attempted','Overall score'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: 600 }}>{h}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {grades.map((g, i) => (
-            <React.Fragment key={i}>
-              <tr style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                <td style={{ padding: '10px 16px', fontWeight: 500 }}>{g.studentId}</td>
-                <td style={{ padding: '10px 16px', color: '#555' }}>{g.grades.length}</td>
-                <td style={{ padding: '10px 16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ flex: 1, background: '#e9ecef', borderRadius: 4, height: 8, maxWidth: 120 }}>
-                      <div style={{ width: `${g.totalScore}%`, background: g.totalScore >= 80 ? '#28a745' : g.totalScore >= 50 ? '#ffc107' : '#dc3545', height: 8, borderRadius: 4 }} />
-                    </div>
-                    <span style={{ fontWeight: 600, color: g.totalScore >= 80 ? '#155724' : g.totalScore >= 50 ? '#856404' : '#721c24' }}>{g.totalScore}%</span>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: '#fff', borderRadius: 8, width: '100%', maxWidth: 760, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
+        <div style={{ background: '#0f6cbf', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px 8px 0 0' }}>
+          <div>
+            <div style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>{questionTitle}</div>
+            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 }}>{studentId} · {subs.length} submission{subs.length !== 1 ? 's' : ''}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 14 }}>✕ Close</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1, padding: 16 }}>
+          {loading ? <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>Loading…</div>
+          : subs.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>No submissions found.</div>
+          : subs.map((sub, i) => (
+            <div key={sub._id} style={{ border: '1px solid #dee2e6', borderRadius: 6, marginBottom: 10, overflow: 'hidden' }}>
+              <div onClick={() => setExpanded(expanded === i ? null : i)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer', background: expanded === i ? '#f0f4ff' : '#f8f9fa' }}>
+                <span style={{ fontSize: 12, color: '#888' }}>#{subs.length - i}</span>
+                <span style={{ fontSize: 12, fontFamily: 'monospace', background: '#e8eaf6', padding: '2px 8px', borderRadius: 4 }}>{sub.language}</span>
+                <span style={{ fontSize: 12, color: '#666' }}>{new Date(sub.submittedAt).toLocaleString()}</span>
+                <span style={{ fontSize: 12 }}>{sub.totalPassed}/{sub.totalCases} tests passed</span>
+                <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: 13, color: sub.score >= 80 ? '#155724' : sub.score >= 50 ? '#856404' : '#721c24' }}>{sub.score}%</span>
+                <span style={{ fontSize: 12, color: '#888' }}>{expanded === i ? '▲' : '▼'}</span>
+              </div>
+              {expanded === i && (
+                <div style={{ padding: '0 14px 14px' }}>
+                  <div style={{ background: '#1e1e2e', borderRadius: 4, padding: 12, marginBottom: 10 }}>
+                    <pre style={{ margin: 0, color: '#f8f8f2', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', overflowX: 'auto' }}>{sub.code}</pre>
                   </div>
-                </td>
-              </tr>
-              {g.grades.map((qg, j) => (
-                <tr key={j} style={{ background: '#f9f9ff', borderBottom: '1px solid #f0f0f0' }}>
-                  <td style={{ padding: '6px 16px 6px 36px', color: '#888', fontSize: 12 }}>↳ {qg.questionTitle}</td>
-                  <td style={{ padding: '6px 16px', color: '#888', fontSize: 12 }}>{qg.attempts} attempt{qg.attempts !== 1 ? 's' : ''}</td>
-                  <td style={{ padding: '6px 16px', fontSize: 12, fontWeight: 500, color: qg.bestScore >= 80 ? '#155724' : qg.bestScore >= 50 ? '#856404' : '#721c24' }}>{qg.bestScore}%</td>
-                </tr>
-              ))}
-            </React.Fragment>
+                  {sub.testResults?.length > 0 && (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: '#f8f9fa' }}>
+                          {['Test case', 'Input', 'Expected', 'Got', ''].map(h => <th key={h} style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: 600 }}>{h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sub.testResults.map((tr, k) => (
+                          <tr key={k} style={{ background: tr.passed ? '#f0fff4' : '#fff0f0', borderBottom: '1px solid #f0f0f0' }}>
+                            <td style={{ padding: '6px 10px' }}>{tr.label || `#${k+1}`}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{tr.input || '—'}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{tr.expectedOutput}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{tr.actualOutput || '—'}</td>
+                            <td style={{ padding: '6px 10px', fontWeight: 700, color: tr.passed ? '#28a745' : '#dc3545' }}>{tr.passed ? '✓' : '✗'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {sub.executionError && <div style={{ marginTop: 8, background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 4, padding: '8px 12px', fontSize: 12, color: '#856404' }}>⚠ {sub.executionError}</div>}
+                </div>
+              )}
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── Gradebook view — session-grouped, sorted by roll number ── */
+const GradebookView = ({ courseId }) => {
+  const [sessions, setSessions]           = useState([]);
+  const [grades, setGrades]               = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [expandedSessions, setExpanded]   = useState(new Set());
+  const [drill, setDrill]                 = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      axios.get(`/api/sessions/course/${courseId}`),
+      axios.get(`/api/grades/course/${courseId}`),
+    ]).then(([sessRes, gradeRes]) => {
+      setSessions(sessRes.data);
+      setGrades(gradeRes.data);
+      // expand all sessions by default
+      setExpanded(new Set(sessRes.data.map(s => s._id)));
+    }).catch(console.error).finally(() => setLoading(false));
+  }, [courseId]);
+
+  const toggleSession = (id) => setExpanded(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  // For a session, collect students who have a grade entry for any question in it,
+  // sorted by roll number.
+  const getSessionStudents = (session) => {
+    const qIds = new Set((session.questions || []).map(q => (q._id || q).toString()));
+    const map = new Map();
+    for (const grade of grades) {
+      const matching = (grade.grades || []).filter(g => qIds.has((g.questionId || '').toString()));
+      if (!matching.length) continue;
+      const avg = Math.round(matching.reduce((s, g) => s + g.bestScore, 0) / matching.length);
+      map.set(grade.studentId, { studentId: grade.studentId, rollNumber: grade.rollNumber || '', questions: matching, sessionScore: avg });
+    }
+    return Array.from(map.values()).sort((a, b) => compareRollNumbers(a.rollNumber, b.rollNumber));
+  };
+
+  const scoreColor = v => v >= 80 ? '#155724' : v >= 50 ? '#856404' : '#721c24';
+  const scoreBg    = v => v >= 80 ? '#28a745' : v >= 50 ? '#ffc107' : '#dc3545';
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#666' }}>Loading gradebook…</div>;
+
+  return (
+    <>
+      {drill && (
+        <SubmissionHistoryModal
+          studentId={drill.studentId}
+          questionId={drill.questionId}
+          questionTitle={drill.questionTitle}
+          courseId={courseId}
+          onClose={() => setDrill(null)}
+        />
+      )}
+
+      {/* Header */}
+      <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', overflow: 'hidden', marginBottom: 16 }}>
+        <div style={{ background: '#0f6cbf', padding: '14px 20px' }}>
+          <h2 style={{ margin: 0, color: '#fff', fontSize: 18, fontWeight: 600 }}>Gradebook — {courseId}</h2>
+          <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 }}>
+            Grouped by session · Sorted by roll number · Click a question row to view submission history
+          </div>
+        </div>
+      </div>
+
+      {sessions.length === 0 ? (
+        <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', padding: 40, textAlign: 'center', color: '#888' }}>
+          No sessions in this course yet.
+        </div>
+      ) : sessions.map((sess, si) => {
+        const students = getSessionStudents(sess);
+        const isOpen   = expandedSessions.has(sess._id);
+
+        return (
+          <div key={sess._id} style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', marginBottom: 12, overflow: 'hidden' }}>
+
+            {/* Session header — click to collapse/expand */}
+            <div
+              onClick={() => toggleSession(sess._id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', cursor: 'pointer', background: '#f8f9fa', borderBottom: isOpen ? '1px solid #dee2e6' : 'none', userSelect: 'none' }}
+            >
+              <div style={{ width: 26, height: 26, borderRadius: 4, background: COURSE_PATTERNS[si % COURSE_PATTERNS.length], flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <span style={{ fontWeight: 600, fontSize: 14, color: '#333' }}>{sess.name}</span>
+                {sess.description && <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{sess.description}</span>}
+              </div>
+              <span style={{ fontSize: 12, color: '#777' }}>{students.length} student{students.length !== 1 ? 's' : ''}</span>
+              <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 10, fontWeight: 600, background: sess.isActive ? '#d4edda' : '#f0f0f0', color: sess.isActive ? '#155724' : '#999' }}>
+                {sess.isActive ? 'Active' : 'Inactive'}
+              </span>
+              <span style={{ color: '#888', fontSize: 13 }}>{isOpen ? '▲' : '▼'}</span>
+            </div>
+
+            {isOpen && (
+              students.length === 0 ? (
+                <div style={{ padding: '20px 16px', textAlign: 'center', color: '#888', fontSize: 13 }}>
+                  No submissions for this session yet.
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#fafafa' }}>
+                      {['Roll No.', 'Student', 'Questions attempted', 'Session score', ''].map(h => (
+                        <th key={h} style={{ padding: '8px 14px', textAlign: 'left', borderBottom: '1px solid #dee2e6', fontWeight: 600, fontSize: 12, color: '#555' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((stu, i) => (
+                      <React.Fragment key={stu.studentId}>
+                        {/* Student row */}
+                        <tr style={{ borderBottom: '1px solid #f0f0f0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                          <td style={{ padding: '9px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#555' }}>{stu.rollNumber || '—'}</td>
+                          <td style={{ padding: '9px 14px', fontWeight: 600 }}>{stu.studentId}</td>
+                          <td style={{ padding: '9px 14px', color: '#555' }}>{stu.questions.length}</td>
+                          <td style={{ padding: '9px 14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ width: 80, background: '#e9ecef', borderRadius: 4, height: 7 }}>
+                                <div style={{ width: `${stu.sessionScore}%`, background: scoreBg(stu.sessionScore), height: 7, borderRadius: 4 }} />
+                              </div>
+                              <span style={{ fontWeight: 700, color: scoreColor(stu.sessionScore) }}>{stu.sessionScore}%</span>
+                            </div>
+                          </td>
+                          <td />
+                        </tr>
+                        {/* Per-question sub-rows — clickable to open history */}
+                        {stu.questions.map((qg, j) => (
+                          <tr key={j}
+                            onClick={() => setDrill({ studentId: stu.studentId, questionId: qg.questionId, questionTitle: qg.questionTitle })}
+                            style={{ background: '#f9f9ff', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#eef2ff'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#f9f9ff'}
+                          >
+                            <td colSpan={2} style={{ padding: '6px 14px 6px 36px', color: '#555', fontSize: 12 }}>↳ {qg.questionTitle}</td>
+                            <td style={{ padding: '6px 14px', color: '#888', fontSize: 12 }}>{qg.attempts} attempt{qg.attempts !== 1 ? 's' : ''}</td>
+                            <td style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, color: scoreColor(qg.bestScore) }}>
+                              {qg.bestScore}% <span style={{ color: '#bbb', fontWeight: 400, fontSize: 11 }}>best</span>
+                            </td>
+                            <td style={{ padding: '6px 14px', fontSize: 11, color: '#0f6cbf' }}>View history →</td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+};
+
+/* ── Pool picker modal (used inside SessionDetail) ── */
+const PoolPickerModal = ({ courseId, sessionQuestionIds, onAdd, onClose }) => {
+  const [pool, setPool]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(new Set());
+
+  useEffect(() => {
+    axios.get(`/api/questions/pool/${courseId}`)
+      .then(r => setPool(r.data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [courseId]);
+
+  const alreadyIn = new Set((sessionQuestionIds || []).map(id => id.toString()));
+  const available = pool.filter(q => !alreadyIn.has(q._id));
+
+  const toggle = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const handleAdd = async () => {
+    if (!selected.size) return;
+    await onAdd([...selected]);
+    onClose();
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: '#fff', borderRadius: 8, width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
+        <div style={{ background: '#0f6cbf', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px 8px 0 0' }}>
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>📦 Add from Question Pool</div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1, padding: 16 }}>
+          {loading ? <div style={{ textAlign: 'center', padding: 30, color: '#666' }}>Loading pool…</div>
+          : available.length === 0 ? <div style={{ textAlign: 'center', padding: 30, color: '#888' }}>No pool questions available (all already added, or pool is empty).</div>
+          : available.map(q => (
+            <div key={q._id} onClick={() => toggle(q._id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: `1px solid ${selected.has(q._id) ? '#0f6cbf' : '#dee2e6'}`, borderRadius: 6, marginBottom: 8, cursor: 'pointer', background: selected.has(q._id) ? '#f0f6ff' : '#fff' }}>
+              <input type="checkbox" checked={selected.has(q._id)} onChange={() => toggle(q._id)} onClick={e => e.stopPropagation()} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{q.title}</div>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{LANGUAGES.find(l => l.value === q.language)?.label || q.language} · {q.difficulty}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #dee2e6', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={s.btnGray}>Cancel</button>
+          <button onClick={handleAdd} disabled={!selected.size} style={{ ...s.btnBlue, opacity: selected.size ? 1 : 0.5 }}>
+            Add {selected.size > 0 ? `${selected.size} question${selected.size > 1 ? 's' : ''}` : 'selected'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── Randomize modal ── */
+const RandomizeModal = ({ sessionId, courseId, onDone, onClose }) => {
+  const [mode, setMode]         = useState('simple'); // 'simple' | 'topic'
+  const [count, setCount]       = useState(5);
+  const [language, setLanguage] = useState('');
+  const [replace, setReplace]   = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [msg, setMsg]           = useState('');
+  const [topics, setTopics]     = useState([]); // available topics from pool
+  // topic-wise rows: [{ topic, count }]
+  const [topicRows, setTopicRows] = useState([{ topic: '', count: 2 }]);
+
+  // Fetch available topics from pool
+  useEffect(() => {
+    axios.get(`/api/questions/pool/${courseId}`).then(r => {
+      const t = [...new Set(r.data.map(q => q.topic).filter(Boolean))].sort();
+      setTopics(t);
+      if (t.length) setTopicRows([{ topic: t[0], count: 2 }]);
+    }).catch(() => {});
+  }, [courseId]);
+
+  const addRow    = () => setTopicRows([...topicRows, { topic: topics[0] || '', count: 2 }]);
+  const removeRow = (i) => setTopicRows(topicRows.filter((_, idx) => idx !== i));
+  const updateRow = (i, field, val) => setTopicRows(topicRows.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+
+  const run = async () => {
+    setLoading(true); setMsg('');
+    try {
+      const body = mode === 'topic'
+        ? { topicConfig: topicRows.filter(r => r.topic && r.count > 0), replace }
+        : { count, language: language || undefined, replace };
+      const res = await axios.post(`/api/sessions/${sessionId}/randomize`, body);
+      setMsg(`✓ Added ${res.data.picked} question${res.data.picked !== 1 ? 's' : ''} from the pool.`);
+      onDone(res.data.session);
+    } catch (e) {
+      setMsg('✗ ' + (e.response?.data?.error || e.message));
+    } finally { setLoading(false); }
+  };
+
+  const Toggle = ({ value, onChange }) => (
+    <div onClick={onChange} style={{ width: 40, height: 22, borderRadius: 11, background: value ? '#0f6cbf' : '#ccc', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+      <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: value ? 20 : 2, transition: 'left 0.2s' }} />
+    </div>
+  );
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ background: '#fff', borderRadius: 8, width: 460, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: '#0f6cbf', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', flexShrink: 0 }}>
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>🎲 Randomize from Pool</div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ padding: 20, overflowY: 'auto' }}>
+          {/* Mode toggle */}
+          <div style={{ display: 'flex', gap: 0, marginBottom: 18, border: '1px solid #dee2e6', borderRadius: 6, overflow: 'hidden' }}>
+            {[['simple', '🎲 Simple'], ['topic', '📚 By topic']].map(([id, label]) => (
+              <button key={id} onClick={() => setMode(id)} style={{ flex: 1, padding: '8px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, background: mode === id ? '#0f6cbf' : '#fff', color: mode === id ? '#fff' : '#555' }}>{label}</button>
+            ))}
+          </div>
+
+          {mode === 'simple' ? (
+            <>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>Number of questions</label>
+                <input type="number" min={1} max={50} value={count} onChange={e => setCount(Number(e.target.value))} style={{ ...s.input, width: 80 }} />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={s.label}>Filter by language <span style={{ fontWeight: 400, color: '#888' }}>(optional)</span></label>
+                <select value={language} onChange={e => setLanguage(e.target.value)} style={{ ...s.input, width: 200 }}>
+                  <option value="">Any language</option>
+                  {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                </select>
+              </div>
+            </>
+          ) : (
+            <div style={{ marginBottom: 16 }}>
+              <label style={s.label}>Pick N questions per topic</label>
+              {topics.length === 0 && (
+                <div style={{ fontSize: 12, color: '#856404', background: '#fff3cd', borderRadius: 4, padding: '8px 12px', marginBottom: 10 }}>
+                  ⚠ No topics found in pool. Tag your pool questions with topics first.
+                </div>
+              )}
+              {topicRows.map((row, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                  {topics.length > 0 ? (
+                    <select value={row.topic} onChange={e => updateRow(i, 'topic', e.target.value)} style={{ ...s.input, flex: 1 }}>
+                      <option value="">— topic —</option>
+                      {topics.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  ) : (
+                    <input value={row.topic} onChange={e => updateRow(i, 'topic', e.target.value)} placeholder="Topic name" style={{ ...s.input, flex: 1 }} />
+                  )}
+                  <input type="number" min={1} max={20} value={row.count} onChange={e => updateRow(i, 'count', Number(e.target.value))} style={{ ...s.input, width: 60 }} />
+                  <span style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap' }}>questions</span>
+                  {topicRows.length > 1 && <button onClick={() => removeRow(i)} style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: 16 }}>×</button>}
+                </div>
+              ))}
+              <button onClick={addRow} style={{ ...s.btnDash, fontSize: 12, padding: '5px 12px', marginTop: 4 }}>+ Add topic row</button>
+            </div>
+          )}
+
+          <div style={{ marginBottom: 18 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+              <Toggle value={replace} onChange={() => setReplace(v => !v)} />
+              Replace existing session questions
+            </label>
+          </div>
+
+          {msg && <div style={{ marginBottom: 12, fontSize: 13, color: msg.startsWith('✓') ? '#155724' : '#721c24', background: msg.startsWith('✓') ? '#d4edda' : '#f8d7da', borderRadius: 4, padding: '8px 12px' }}>{msg}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={run} disabled={loading} style={s.btnBlue}>{loading ? 'Randomizing…' : '🎲 Randomize'}</button>
+            <button onClick={onClose} style={s.btnGray}>Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── Question Pool view ── */
+const QuestionPoolView = ({ courseId, sessions }) => {
+  const [pool, setPool]         = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]         = useState({ title: '', description: '', difficulty: 'medium', language: 'c', placeholderCode: '', driverPreCode: '', driverPostCode: '', topic: '' });
+  const [topicFilter, setTopicFilter] = useState('');
+  const allTopics = [...new Set(pool.map(q => q.topic).filter(Boolean))].sort();
+  const [saving, setSaving]     = useState(false);
+  const [addTarget, setAddTarget] = useState(null); // { q } — pick session to add to
+  const [targetSession, setTargetSession] = useState('');
+
+  const fetchPool = () => {
+    setLoading(true);
+    axios.get(`/api/questions/pool/${courseId}`).then(r => setPool(r.data)).catch(console.error).finally(() => setLoading(false));
+  };
+  useEffect(fetchPool, [courseId]);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim() || !form.description.trim()) return;
+    setSaving(true);
+    try {
+      const res = await axios.post('/api/questions/pool', { ...form, courseId });
+      setPool([res.data, ...pool]);
+      setForm({ title: '', description: '', difficulty: 'medium', language: 'c', placeholderCode: '', driverPreCode: '', driverPostCode: '' });
+      setShowForm(false);
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Remove this question from the pool?')) return;
+    try {
+      await axios.delete(`/api/questions/${id}`);
+      setPool(pool.filter(q => q._id !== id));
+    } catch (e) { alert('Failed to delete.'); }
+  };
+
+  const handleAddToSession = async () => {
+    if (!targetSession || !addTarget) return;
+    try {
+      await axios.post(`/api/sessions/${targetSession}/questions/from-pool`, { questionIds: [addTarget._id] });
+      alert(`✓ Added "${addTarget.title}" to session.`);
+      setAddTarget(null); setTargetSession('');
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: '#333' }}>Question Pool</h1>
+        <button onClick={() => setShowForm(v => !v)} style={s.btnBlue}>{showForm ? 'Cancel' : '+ Add question'}</button>
+      </div>
+      <div style={{ fontSize: 13, color: '#666', background: '#f0f4ff', border: '1px solid #c5d5f5', borderRadius: 6, padding: '7px 12px', marginBottom: 16 }}>
+        📦 Pool questions are reusable across sessions. Add them to any session or use Randomize to pick automatically.
+      </div>
+
+      {/* Create form */}
+      {showForm && (
+        <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', marginBottom: 20, overflow: 'hidden' }}>
+          <div style={{ background: '#0f6cbf', padding: '14px 20px' }}><h2 style={{ margin: 0, color: '#fff', fontSize: 18, fontWeight: 600 }}>New pool question</h2></div>
+          <form onSubmit={handleCreate} style={{ padding: 20 }}>
+            <div style={{ marginBottom: 12 }}><label style={s.label}>Title</label><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} style={s.input} required /></div>
+            <div style={{ marginBottom: 12 }}><label style={s.label}>Description</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={{ ...s.input, height: 80, resize: 'vertical' }} required /></div>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}><label style={s.label}>Difficulty</label>
+                <select value={form.difficulty} onChange={e => setForm({ ...form, difficulty: e.target.value })} style={s.input}>
+                  <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}><label style={s.label}>Language</label>
+                <select value={form.language} onChange={e => setForm({ ...form, language: e.target.value })} style={s.input}>
+                  {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={s.label}>Topic <span style={{ fontWeight: 400, color: '#888' }}>(e.g. Arrays, Sorting, Recursion)</span></label>
+              <input value={form.topic} onChange={e => setForm({ ...form, topic: e.target.value })} style={s.input} placeholder="e.g. Arrays" list="pool-topics" />
+              <datalist id="pool-topics">{allTopics.map(t => <option key={t} value={t} />)}</datalist>
+            </div>
+            <div style={{ marginBottom: 10 }}><label style={s.label}>🔒 Pre-code</label><textarea value={form.driverPreCode} onChange={e => setForm({ ...form, driverPreCode: e.target.value })} style={{ ...s.input, ...s.mono, height: 70, resize: 'vertical', background: '#f0f0f0' }} /></div>
+            <div style={{ marginBottom: 10 }}><label style={s.label}>✏️ Student code</label><textarea value={form.placeholderCode} onChange={e => setForm({ ...form, placeholderCode: e.target.value })} style={{ ...s.input, ...s.mono, height: 90, resize: 'vertical' }} /></div>
+            <div style={{ marginBottom: 16 }}><label style={s.label}>🔒 Post-code</label><textarea value={form.driverPostCode} onChange={e => setForm({ ...form, driverPostCode: e.target.value })} style={{ ...s.input, ...s.mono, height: 60, resize: 'vertical', background: '#f0f0f0' }} /></div>
+            <button type="submit" disabled={saving} style={s.btnBlue}>{saving ? 'Saving…' : 'Add to pool'}</button>
+          </form>
+        </div>
+      )}
+
+      {/* Session picker for "Add to session" */}
+      {addTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 8, width: 380, padding: 24, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>Add "{addTarget.title}" to session</h3>
+            <select value={targetSession} onChange={e => setTargetSession(e.target.value)} style={{ ...s.input, marginBottom: 16 }}>
+              <option value="">— Choose session —</option>
+              {sessions.map(sess => <option key={sess._id} value={sess._id}>{sess.name}</option>)}
+            </select>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleAddToSession} disabled={!targetSession} style={{ ...s.btnBlue, opacity: targetSession ? 1 : 0.5 }}>Add</button>
+              <button onClick={() => { setAddTarget(null); setTargetSession(''); }} style={s.btnGray}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Topic filter chips */}
+      {allTopics.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button onClick={() => setTopicFilter('')} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, border: '1px solid #dee2e6', background: !topicFilter ? '#0f6cbf' : '#fff', color: !topicFilter ? '#fff' : '#555', cursor: 'pointer' }}>All</button>
+          {allTopics.map(t => (
+            <button key={t} onClick={() => setTopicFilter(t === topicFilter ? '' : t)} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, border: '1px solid #dee2e6', background: topicFilter === t ? '#0f6cbf' : '#fff', color: topicFilter === t ? '#fff' : '#555', cursor: 'pointer' }}>{t}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Pool question list */}
+      {loading ? <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>Loading pool…</div>
+      : pool.length === 0 ? (
+        <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', padding: 40, textAlign: 'center', color: '#888' }}>
+          No questions in the pool yet. Click "+ Add question" to build your bank.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {pool.filter(q => !topicFilter || q.topic === topicFilter).map(q => (
+            <div key={q._id} style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#333', marginBottom: 4 }}>{q.title}</div>
+                <div style={{ fontSize: 12, color: '#888' }}>{q.description}</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  {q.topic && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#fef3c7', color: '#92400e', fontWeight: 600 }}>📚 {q.topic}</span>}
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: DIFF_COLORS[q.difficulty]?.bg, color: DIFF_COLORS[q.difficulty]?.color, fontWeight: 500 }}>{q.difficulty}</span>
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#e8f0fb', color: '#0f6cbf', fontWeight: 500 }}>{LANGUAGES.find(l => l.value === q.language)?.label || q.language}</span>
+                  {q.testCases?.length > 0 && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#f0f0f0', color: '#555' }}>{q.testCases.length} test case{q.testCases.length !== 1 ? 's' : ''}</span>}
+                </div>
+              </div>
+              <button onClick={() => setAddTarget(q)} style={s.btnBlue}>Add to session →</button>
+              <button onClick={() => handleDelete(q._id)} style={s.btnRed}>Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -589,7 +1140,7 @@ const CoursesView = ({ courses, activeCourseCode, onSwitchCourse, onCoursesChang
 
 /* ── Add question form (within a session) ── */
 const AddQuestionForm = ({ sessionId, courseId, onAdded, onCancel }) => {
-  const [form, setForm] = useState({ title: '', description: '', difficulty: 'medium', language: 'c', placeholderCode: '', hideTestCases: false });
+  const [form, setForm] = useState({ title: '', description: '', difficulty: 'medium', language: 'c', placeholderCode: '', driverPreCode: '', driverPostCode: '', hideTestCases: false });
   const [testCases, setTestCases] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -634,7 +1185,21 @@ const AddQuestionForm = ({ sessionId, courseId, onAdded, onCancel }) => {
             </select>
           </div>
         </div>
-        <div style={{ marginBottom: 12 }}><label style={s.label}>Placeholder code</label><textarea value={form.placeholderCode} onChange={e => setForm({ ...form, placeholderCode: e.target.value })} style={{ ...s.input, ...s.mono, height: 130, resize: 'vertical' }} /></div>
+        <div style={{ background: '#f0f4ff', border: '1px solid #c5d5f5', borderRadius: 4, padding: '8px 12px', fontSize: 12, color: '#555', marginBottom: 10 }}>
+          💡 Pre-code and Post-code are locked for students (like LeetCode driver code). Only the student code section is editable.
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label style={s.label}>🔒 Pre-code <span style={{ fontWeight: 400, color: '#888' }}>(locked, shown above editor)</span></label>
+          <textarea value={form.driverPreCode} onChange={e => setForm({ ...form, driverPreCode: e.target.value })} style={{ ...s.input, ...s.mono, height: 80, resize: 'vertical', background: '#f0f0f0', color: '#555' }} placeholder="e.g. headers, main() opening, input reading..." />
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label style={s.label}>✏️ Student code <span style={{ fontWeight: 400, color: '#888' }}>(editable starting point)</span></label>
+          <textarea value={form.placeholderCode} onChange={e => setForm({ ...form, placeholderCode: e.target.value })} style={{ ...s.input, ...s.mono, height: 100, resize: 'vertical' }} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={s.label}>🔒 Post-code <span style={{ fontWeight: 400, color: '#888' }}>(locked, shown below editor)</span></label>
+          <textarea value={form.driverPostCode} onChange={e => setForm({ ...form, driverPostCode: e.target.value })} style={{ ...s.input, ...s.mono, height: 60, resize: 'vertical', background: '#f0f0f0', color: '#555' }} placeholder="e.g. closing braces, return 0; }" />
+        </div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <label style={{ ...s.label, marginBottom: 0 }}>Test cases</label>
@@ -658,8 +1223,10 @@ const AddQuestionForm = ({ sessionId, courseId, onAdded, onCancel }) => {
 
 /* ── Session detail view (questions in a session) ── */
 const SessionDetail = ({ session, courseId, onBack, onSessionUpdated }) => {
-  const [questions, setQuestions] = useState(session.questions || []);
-  const [showAddQ, setShowAddQ]   = useState(false);
+  const [questions, setQuestions]   = useState(session.questions || []);
+  const [showAddQ, setShowAddQ]     = useState(false);
+  const [showPool, setShowPool]     = useState(false);
+  const [showRandom, setShowRandom] = useState(false);
 
   const handleQuestionAdded = (data) => {
     // data = { session: populated, question: new question }
@@ -707,6 +1274,29 @@ const SessionDetail = ({ session, courseId, onBack, onSessionUpdated }) => {
         </div>
       </div>
 
+      {/* Pool picker modal */}
+      {showPool && (
+        <PoolPickerModal
+          courseId={courseId}
+          sessionQuestionIds={questions.map(q => q._id)}
+          onAdd={async (ids) => {
+            const res = await axios.post(`/api/sessions/${session._id}/questions/from-pool`, { questionIds: ids });
+            setQuestions(res.data?.questions || questions);
+          }}
+          onClose={() => setShowPool(false)}
+        />
+      )}
+
+      {/* Randomize modal */}
+      {showRandom && (
+        <RandomizeModal
+          sessionId={session._id}
+          courseId={courseId}
+          onDone={(updatedSession) => { setQuestions(updatedSession?.questions || questions); setShowRandom(false); }}
+          onClose={() => setShowRandom(false)}
+        />
+      )}
+
       {/* Add question form */}
       {showAddQ && (
         <AddQuestionForm
@@ -722,7 +1312,11 @@ const SessionDetail = ({ session, courseId, onBack, onSessionUpdated }) => {
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#333' }}>
           Questions <span style={{ fontWeight: 400, color: '#888', fontSize: 14 }}>({questions.length})</span>
         </h3>
-        {!showAddQ && <button onClick={() => setShowAddQ(true)} style={s.btnBlue}>+ Add question</button>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowRandom(true)} style={s.btnGray}>🎲 Randomize</button>
+          <button onClick={() => setShowPool(true)} style={s.btnGray}>📦 From pool</button>
+          {!showAddQ && <button onClick={() => setShowAddQ(true)} style={s.btnBlue}>+ Add question</button>}
+        </div>
       </div>
 
       {questions.length === 0 ? (
@@ -752,7 +1346,7 @@ const SessionsView = ({ courseId, user }) => {
   const [loading, setLoading]         = useState(true);
   const [showCreate, setShowCreate]   = useState(false);
   const [activeSession, setActiveSession] = useState(null);
-  const [form, setForm] = useState({ name: '', description: '', isTimed: false, durationMinutes: 30, allowMultipleAttempts: true });
+  const [form, setForm] = useState({ name: '', description: '', isTimed: false, durationMinutes: 30 });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(null);
 
@@ -774,7 +1368,7 @@ const SessionsView = ({ courseId, user }) => {
     try {
       const res = await axios.post('/api/sessions', { ...form, courseId, createdBy: user?.username || 'teacher' });
       setSessions([res.data, ...sessions]);
-      setForm({ name: '', description: '', isTimed: false, durationMinutes: 30, allowMultipleAttempts: true });
+      setForm({ name: '', description: '', isTimed: false, durationMinutes: 30 });
       setShowCreate(false);
     } catch(e) { console.error(e); }
     finally { setSaving(false); }
@@ -797,6 +1391,13 @@ const SessionsView = ({ courseId, user }) => {
     } catch(e) { console.error(e); }
   };
 
+  const toggleActive = async (sess) => {
+    try {
+      const res = await axios.put(`/api/sessions/${sess._id}`, { isActive: !sess.isActive });
+      setSessions(sessions.map(s => s._id === sess._id ? { ...s, isActive: res.data.isActive } : s));
+    } catch(e) { alert('Failed to update session.'); }
+  };
+
   if (activeSession) {
     return (
       <SessionDetail
@@ -810,9 +1411,12 @@ const SessionsView = ({ courseId, user }) => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: '#333' }}>Sessions</h1>
         <button onClick={() => setShowCreate(v => !v)} style={s.btnBlue}>{showCreate ? 'Cancel' : '+ Add session'}</button>
+      </div>
+      <div style={{ marginBottom: 16, fontSize: 12, color: '#666', background: '#f0f4ff', border: '1px solid #c5d5f5', borderRadius: 6, padding: '7px 12px' }}>
+        📌 Creating sessions for course: <strong>{courseId}</strong>. Make sure this matches the course your students are enrolled in.
       </div>
 
       {showCreate && (
@@ -838,16 +1442,6 @@ const SessionsView = ({ courseId, user }) => {
               )}
             </div>
 
-            {/* Allow multiple attempts toggle */}
-            <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-                <div onClick={() => setForm(f => ({ ...f, allowMultipleAttempts: !f.allowMultipleAttempts }))} style={{ width: 40, height: 22, borderRadius: 11, background: form.allowMultipleAttempts ? '#0f6cbf' : '#ccc', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: form.allowMultipleAttempts ? 20 : 2, transition: 'left 0.2s' }} />
-                </div>
-                <span style={{ fontWeight: 500 }}>Allow multiple attempts per question</span>
-              </label>
-            </div>
-
             <button type="submit" disabled={saving} style={s.btnBlue}>{saving ? 'Creating…' : 'Create session'}</button>
           </form>
         </div>
@@ -868,19 +1462,25 @@ const SessionsView = ({ courseId, user }) => {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 15, color: '#333', marginBottom: 3 }}>{sess.name}</div>
                   {sess.description && <div style={{ fontSize: 12, color: '#888' }}>{sess.description}</div>}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#e8f0fb', color: '#0f6cbf', fontWeight: 500 }}>
                       {sess.questions?.length || 0} question{(sess.questions?.length || 0) !== 1 ? 's' : ''}
                     </span>
                     {sess.isTimed && (
                       <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#fff3cd', color: '#856404', fontWeight: 500 }}>⏱ {sess.durationMinutes} min</span>
                     )}
-                    {!sess.allowMultipleAttempts && (
-                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#f8d7da', color: '#721c24', fontWeight: 500 }}>Single attempt</span>
-                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Active toggle */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', userSelect: 'none' }}>
+                    <div onClick={() => toggleActive(sess)} style={{ width: 40, height: 22, borderRadius: 11, background: sess.isActive ? '#28a745' : '#ccc', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: sess.isActive ? 20 : 2, transition: 'left 0.2s' }} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: sess.isActive ? '#28a745' : '#999' }}>
+                      {sess.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </label>
                   <button onClick={() => openSession(sess)} style={s.btnBlue}>Open →</button>
                   <button onClick={() => handleDelete(sess)} disabled={deleting === sess._id} style={s.btnRed}>{deleting === sess._id ? '…' : 'Delete'}</button>
                 </div>
@@ -895,16 +1495,20 @@ const SessionsView = ({ courseId, user }) => {
 
 /* ── Main dashboard ── */
 const TeacherDashboard = ({ courseId = 'course-001', user, courses = [], activeCourseCode, onCoursesChanged, onSwitchCourse }) => {
-  const [active, setActive] = useState('courses');
-  const [toast, setToast]   = useState(null);
-
-  const notify = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
+  const [active, setActive]     = useState('courses');
+  const [sessions, setSessions] = useState([]); // kept in sync so pool can list them
   const activeCourse = courses.find(c => c.code === activeCourseCode);
   const noActiveCourse = !activeCourse;
 
+  // Keep sessions in sync when courseId changes (used by pool's "Add to session" picker)
+  useEffect(() => {
+    if (!activeCourseCode || activeCourseCode === 'course-001') return;
+    axios.get(`/api/sessions/course/${activeCourseCode}`).then(r => setSessions(r.data)).catch(() => {});
+  }, [activeCourseCode]);
+
   const handleOpenCourse = (code) => { onSwitchCourse(code); setActive('sessions'); };
 
-  const sectionLabels = { sessions: 'Sessions', grades: 'Gradebook', plagiarism: 'Plagiarism check', courses: 'My courses' };
+  const sectionLabels = { sessions: 'Sessions', pool: 'Question pool', grades: 'Gradebook', plagiarism: 'Plagiarism check', courses: 'My courses' };
 
   return (
     <div style={{ display: 'flex', minHeight: 'calc(100vh - 52px)', background: '#f2f2f2' }}>
@@ -918,10 +1522,6 @@ const TeacherDashboard = ({ courseId = 'course-001', user, courses = [], activeC
           <span>{sectionLabels[active] || 'Sessions'}</span>
         </div>
 
-        {toast && (
-          <div style={{ background: '#d4edda', border: '1px solid #c3e6cb', color: '#155724', borderRadius: 4, padding: '10px 16px', marginBottom: 16, fontSize: 14 }}>✓ {toast}</div>
-        )}
-
         {['sessions', 'grades', 'plagiarism'].includes(active) && noActiveCourse && (
           <>
             <h1 style={{ margin: '0 0 16px', fontSize: 22, fontWeight: 600, color: '#333' }}>{sectionLabels[active]}</h1>
@@ -934,6 +1534,10 @@ const TeacherDashboard = ({ courseId = 'course-001', user, courses = [], activeC
 
         {active === 'sessions' && !noActiveCourse && (
           <SessionsView courseId={courseId} user={user} />
+        )}
+
+        {active === 'pool' && !noActiveCourse && (
+          <QuestionPoolView courseId={courseId} sessions={sessions} />
         )}
 
         {active === 'grades' && !noActiveCourse && (

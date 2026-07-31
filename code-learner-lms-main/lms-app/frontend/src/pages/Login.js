@@ -37,6 +37,12 @@ const Login = ({ onLogin }) => {
     try {
       if (mode === 'login') {
         const res = await axios.post('/api/auth/login', { username, password });
+        const actualRole = res.data.user?.role;
+        if (actualRole !== role) {
+          setError(`This is a ${actualRole} account. Please select "${actualRole === 'teacher' ? '🏫 Teacher' : '🎓 Student'}" above and try again.`);
+          setLoading(false);
+          return;
+        }
         onLogin(res.data);
       } else {
         if (!name.trim()) {
@@ -98,12 +104,12 @@ const Login = ({ onLogin }) => {
             </h2>
             <p style={{ margin: '0 0 20px', fontSize: 13, color: '#666' }}>
               {mode === 'login'
-                ? 'Sign in to access your course questions and grades.'
+                ? 'Select your role above, then sign in with your credentials.'
                 : 'Register as a student or a teacher, then create or join a course.'}
             </p>
 
             {/* Role selector */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, opacity: mode === 'login' ? 0.6 : 1 }}>
               {['student', 'teacher'].map((r) => (
                 <button
                   key={r}

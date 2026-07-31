@@ -49,6 +49,27 @@ const s = {
   btnGray: { padding: '7px 16px', background: '#fff', color: '#333', border: '1px solid #ced4da', borderRadius: 4, fontSize: 13, cursor: 'pointer' },
 };
 
+/* ── SQL schema reference panel ── */
+const SqlSchemaPanel = ({ setupSql }) => {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ border: '1px solid #ced4da', borderRadius: 4, marginBottom: 8, overflow: 'hidden' }}>
+      <div
+        onClick={() => setOpen(v => !v)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: '#f0f4ff', cursor: 'pointer', userSelect: 'none' }}
+      >
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#0f6cbf' }}>🗂 Table schema (auto-created before your query runs)</span>
+        <span style={{ fontSize: 12, color: '#888' }}>{open ? '▲ hide' : '▼ show'}</span>
+      </div>
+      {open && (
+        <pre style={{ margin: 0, padding: '10px 12px', background: '#1e1e2e', color: '#a6e3a1', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', overflowX: 'auto' }}>
+          {setupSql}
+        </pre>
+      )}
+    </div>
+  );
+};
+
 /* ── Per-question code editor ── */
 const CodeEditor = ({ question, studentId, courseId, hideTestCases: forceHide, onAttempted }) => {
   const [lang, setLang]         = useState(question.language || '');
@@ -88,12 +109,43 @@ const CodeEditor = ({ question, studentId, courseId, hideTestCases: forceHide, o
         </div>
       </div>
 
-      <textarea
-        value={code}
-        onChange={e => setCode(e.target.value)}
-        placeholder={lang ? (PLACEHOLDERS[lang] || '// start coding here') : '// select a language above'}
-        style={{ ...s.input, ...s.mono, height: 180, resize: 'vertical', background: '#1e1e2e', color: '#cdd6f4', border: '1px solid #313244', borderRadius: 4, padding: '10px 12px' }}
-      />
+      {/* SQL schema reference panel */}
+      {lang === 'sql' && (() => {
+        const setupSql = (question.testCases || []).map(tc => tc.input).filter(Boolean).join('\n\n').trim();
+        if (!setupSql) return null;
+        return <SqlSchemaPanel setupSql={setupSql} />;
+      })()}
+
+      {/* Unified code editor — pre/post locked (dimmed), middle editable */}
+      <div style={{ border: '1px solid #313244', borderRadius: 4, overflow: 'hidden', background: '#1e1e2e', position: 'relative' }}>
+
+        {/* 🔒 badge — only shown when there is driver code */}
+        {(question.driverPreCode || question.driverPostCode) && (
+          <span style={{ position: 'absolute', top: 6, right: 8, fontSize: 10, color: '#585b70', background: '#1e1e2e', padding: '1px 6px', borderRadius: 8, zIndex: 1, userSelect: 'none' }}>🔒 driver code</span>
+        )}
+
+        {/* Pre-code — dimmed, not selectable */}
+        {question.driverPreCode && (
+          <pre style={{ margin: 0, padding: '10px 12px 0', ...s.mono, color: '#585b70', background: '#1e1e2e', whiteSpace: 'pre-wrap', fontSize: 13, userSelect: 'none', pointerEvents: 'none' }}>
+            {question.driverPreCode}
+          </pre>
+        )}
+
+        {/* Editable student section — seamlessly continues */}
+        <textarea
+          value={code}
+          onChange={e => setCode(e.target.value)}
+          placeholder={lang ? (PLACEHOLDERS[lang] || '// write your solution here') : '// select a language above'}
+          style={{ ...s.mono, width: '100%', height: 140, resize: 'vertical', background: '#1e1e2e', color: '#cdd6f4', border: 'none', outline: 'none', padding: question.driverPreCode ? '2px 12px' : '10px 12px', boxSizing: 'border-box', fontSize: 13, display: 'block' }}
+        />
+
+        {/* Post-code — dimmed, not selectable */}
+        {question.driverPostCode && (
+          <pre style={{ margin: 0, padding: '0 12px 10px', ...s.mono, color: '#585b70', background: '#1e1e2e', whiteSpace: 'pre-wrap', fontSize: 13, userSelect: 'none', pointerEvents: 'none' }}>
+            {question.driverPostCode}
+          </pre>
+        )}
+      </div>
 
       {result && (
         <div style={{ marginTop: 14 }}>
@@ -247,29 +299,31 @@ const SessionExperience = ({ session, courseId, studentId, rollNumber, onExit })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 104px)', margin: '-24px', background: '#f2f2f2' }}>
-      {/* Progress bar */}
-      <div style={{ height: 4, background: '#e9ecef', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ height: 4, width: `${progress}%`, background: '#0f6cbf', transition: 'width 0.4s ease' }} />
-      </div>
-
       {/* Session top bar */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #dee2e6', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-        <button onClick={() => setNavOpen(v => !v)} style={{ ...s.btnGray, padding: '5px 10px', fontSize: 13 }}>
-          {navOpen ? '◀' : '▶'} Questions
-        </button>
-        <div style={{ flex: 1, fontWeight: 600, fontSize: 15, color: '#333' }}>{session.name}</div>
-        <div style={{ fontSize: 13, color: '#666' }}>
-          {attemptedCount}/{total} attempted
-        </div>
-        {session.isTimed && secsLeft !== null && (
-          <div style={{ background: timerBg, color: timerColor, padding: '4px 14px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: 16, border: `1px solid ${timerColor}` }}>
-            ⏱ {fmtTime(secsLeft)}
+      <div style={{ background: '#0f6cbf', flexShrink: 0 }}>
+        {/* Top row: nav toggle, session name, controls */}
+        <div style={{ padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => setNavOpen(v => !v)} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, color: '#fff', padding: '5px 12px', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+            {navOpen ? '◀' : '▶'} Questions
+          </button>
+          <div style={{ flex: 1, fontWeight: 700, fontSize: 16, color: '#fff', letterSpacing: 0.2 }}>{session.name}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', background: 'rgba(0,0,0,0.15)', padding: '3px 10px', borderRadius: 12 }}>
+            {attemptedCount}/{total} attempted
           </div>
-        )}
-        <button onClick={() => { if(window.confirm('Submit session? Unattempted questions will be scored 0.')) doAutoSubmit(); }} disabled={submitting} style={{ ...s.btnBlue, padding: '6px 14px', fontSize: 13 }}>
-          {submitting ? 'Submitting…' : 'Submit all'}
-        </button>
-        <button onClick={() => { if(window.confirm('Exit session? Your answers are saved, but unattempted questions won\'t be auto-submitted.')) onExit(); }} style={{ ...s.btnGray, padding: '6px 12px', fontSize: 13 }}>Exit</button>
+          {session.isTimed && secsLeft !== null && (
+            <div style={{ background: timerBg, color: timerColor, padding: '4px 14px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: 15, border: `1.5px solid ${timerColor}` }}>
+              ⏱ {fmtTime(secsLeft)}
+            </div>
+          )}
+          <button onClick={() => { if(window.confirm('Submit session? Unattempted questions will be scored 0.')) doAutoSubmit(); }} disabled={submitting} style={{ background: '#fff', color: '#0f6cbf', border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            {submitting ? 'Submitting…' : 'Submit all'}
+          </button>
+          <button onClick={() => { if(window.confirm('Exit session? Your answers are saved, but unattempted questions won\'t be auto-submitted.')) onExit(); }} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6, color: '#fff', padding: '6px 14px', fontSize: 13, cursor: 'pointer' }}>Exit</button>
+        </div>
+        {/* Progress bar */}
+        <div style={{ height: 5, background: 'rgba(255,255,255,0.2)' }}>
+          <div style={{ height: 5, width: `${progress}%`, background: progress === 100 ? '#4cdb7a' : '#fff', transition: 'width 0.5s ease' }} />
+        </div>
       </div>
 
       {/* Main content */}
@@ -330,7 +384,7 @@ const SessionExperience = ({ session, courseId, studentId, rollNumber, onExit })
                   </div>
                 </div>
               </div>
-              <CodeEditor question={q} studentId={studentId} courseId={courseId} hideTestCases={q.hideTestCases} onAttempted={handleAttempted} />
+              <CodeEditor key={q._id} question={q} studentId={studentId} courseId={courseId} hideTestCases={q.hideTestCases} onAttempted={handleAttempted} />
               {/* Navigation arrows */}
               <div style={{ padding: '12px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
                 <button onClick={() => setCurrentIdx(i => Math.max(0, i - 1))} disabled={currentIdx === 0} style={{ ...s.btnGray, opacity: currentIdx === 0 ? 0.4 : 1 }}>← Previous</button>
@@ -387,7 +441,10 @@ const StudentSessionsView = ({ courseId, studentId, rollNumber }) => {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 16px', fontSize: 22, fontWeight: 600, color: '#333' }}>Sessions</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: '#333' }}>Sessions</h1>
+        <button onClick={() => { setLoading(true); fetchSessions(); }} style={{ background: 'none', border: '1px solid #dee2e6', borderRadius: 6, padding: '6px 14px', fontSize: 13, cursor: 'pointer', color: '#555' }}>↻ Refresh</button>
+      </div>
       {sessions.length === 0 ? (
         <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', padding: 40, textAlign: 'center', color: '#888' }}>
           No sessions available yet. Check back later.

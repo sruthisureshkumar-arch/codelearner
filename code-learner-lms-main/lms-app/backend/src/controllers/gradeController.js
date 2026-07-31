@@ -3,8 +3,14 @@ const Grade = require('../models/Grade');
 // GET /api/grades/course/:courseId  — full gradebook (teacher view)
 exports.getCourseGrades = async (req, res) => {
   try {
-    const grades = await Grade.find({ courseId: req.params.courseId })
-      .sort({ totalScore: -1 });
+    const grades = await Grade.find({ courseId: req.params.courseId });
+    // Sort by roll number (numeric-aware), students without roll number go last
+    grades.sort((a, b) => {
+      if (!a.rollNumber && !b.rollNumber) return a.studentId.localeCompare(b.studentId);
+      if (!a.rollNumber) return 1;
+      if (!b.rollNumber) return -1;
+      return a.rollNumber.localeCompare(b.rollNumber, undefined, { numeric: true });
+    });
     res.json(grades);
   } catch (err) {
     res.status(500).json({ error: err.message });

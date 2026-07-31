@@ -14,7 +14,7 @@
 const axios = require('axios');
 const questions = require('./seedQuestionsData');
 
-const BASE = 'http://localhost:5000/api';
+const BASE = 'http://localhost:5001/api';
 
 const TEACHER = {
   username: 'testcourse_teacher',

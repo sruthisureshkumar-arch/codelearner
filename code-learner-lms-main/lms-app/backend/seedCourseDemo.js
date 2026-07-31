@@ -12,7 +12,7 @@
 
 const axios = require('axios');
 
-const BASE = 'http://localhost:5000/api';
+const BASE = 'http://localhost:5001/api';
 
 const TEACHER = {
   username: 'teacher_demo',
@@ -110,6 +110,12 @@ async function run() {
 }
 
 run().catch(err => {
-  console.error('Seeding failed:', err.response?.data?.error || err.message);
+  console.error('Seeding failed:');
+  if (err.response) {
+    console.error('  Status:', err.response.status);
+    console.error('  Body:  ', JSON.stringify(err.response.data));
+  } else {
+    console.error('  Error: ', err.message || err);
+  }
   process.exit(1);
 });

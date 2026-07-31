@@ -28,7 +28,8 @@ function compareRollNumbers(a = '', b = '') {
   return 0;
 }
 
-const JUDGE0_URL = 'https://ce.judge0.com/submissions?base64_encoded=false&wait=true';
+// Use local Judge0 if JUDGE0_URL is set in .env, otherwise fall back to hosted
+const JUDGE0_URL = process.env.JUDGE0_URL || 'https://ce.judge0.com/submissions?base64_encoded=false&wait=true';
 
 // Judge0 language IDs
 const JUDGE0_LANG = {
@@ -36,7 +37,7 @@ const JUDGE0_LANG = {
   javascript: 63,   // Node.js 12.14.0
   c:          50,   // C (GCC 9.2.0)
   cpp:        54,   // C++ (GCC 9.2.0)
-  java:       62,   // Java (OpenJDK 13.0.1)
+  java:       62,   // Java (OpenJDK 13.0.1) — class MUST be named Main (enforced below)
   csharp:     51,   // C# (Mono 6.6.0)
   ruby:       72,   // Ruby 2.7.0
   sql:        82,   // SQLite (3.27.2)
@@ -195,6 +196,12 @@ async function runCode(language, code, stdin = '', appendSql = '') {
   // This is passed in via the stdin/appendSql parameters.
   let sourceCode = code;
   let stdinValue = stdin || '';
+
+  // Java: Judge0 saves the file as Main.java — class MUST be named Main
+  if (language === 'java') {
+    sourceCode = sourceCode.replace(/public\s+class\s+(?!Main\b)\w+/g, 'public class Main');
+  }
+
   if (language === 'sql') {
     const parts = [];
     if (stdinValue.trim()) parts.push(stdinValue.trim());
@@ -216,6 +223,11 @@ async function runCode(language, code, stdin = '', appendSql = '') {
       timeout: 15000,
     });
 
+    // Judge0 rate limit — don't silently fail with a 0 score
+    if (res.status === 429) {
+      return { output: null, error: 'Judge0 rate limit reached — too many submissions at once. Please try again in a few seconds.' };
+    }
+
     const { stdout, stderr, compile_output, status } = res.data;
 
     // Compilation error
@@ -232,6 +244,13 @@ async function runCode(language, code, stdin = '', appendSql = '') {
     }
     return { output: (stdout || '').trim(), error: null };
   } catch (err) {
+    // Axios throws on non-2xx — catch 429 here too
+    if (err.response && err.response.status === 429) {
+      return { output: null, error: 'Judge0 rate limit reached — too many submissions at once. Please try again in a few seconds.' };
+    }
+    if (err.code === 'ECONNABORTED') {
+      return { output: null, error: 'Code execution timed out. Check your code for infinite loops.' };
+    }
     return { output: null, error: err.message };
   }
 }
@@ -239,17 +258,25 @@ async function runCode(language, code, stdin = '', appendSql = '') {
 // POST /api/submissions  — run code + save submission
 exports.submitCode = async (req, res) => {
   try {
-    const { questionId, courseId, language, code } = req.body;
+    const { questionId, courseId, language } = req.body;
     // Identity comes from the authenticated JWT, not the request body,
     // so a student can't submit code under another student's name.
     const studentId = req.user.name;
     const studentUsername = req.user.username;
+    let code = req.body.code;
     if (!questionId || !language || !code) {
       return res.status(400).json({ error: 'questionId, language and code are required.' });
     }
 
     const question = await Question.findById(questionId);
     if (!question) return res.status(404).json({ error: 'Question not found.' });
+
+    // Combine driver pre-code + student code + driver post-code (LeetCode-style)
+    const pre  = (question.driverPreCode  || '').trim();
+    const post = (question.driverPostCode || '').trim();
+    if (pre || post) {
+      code = [pre, code, post].filter(Boolean).join('\n');
+    }
 
     // Look up this student's roll number for the course (if enrolled)
     let rollNumber = '';
@@ -321,7 +348,7 @@ exports.submitCode = async (req, res) => {
 
     // Update grade record (only when there are real test cases to grade against)
     if (totalCases > 0) {
-      await updateGrade(studentId, courseId || question.courseId, questionId, question.title, score);
+      await updateGrade(studentId, courseId || question.courseId, questionId, question.title, score, rollNumber);
     }
 
     res.json(submission);
@@ -390,12 +417,26 @@ exports.getStudentHistory = async (req, res) => {
   }
 };
 
+// GET /api/submissions/history?studentId=X&questionId=Y&courseId=Z  (teacher)
+exports.getSubmissionHistory = async (req, res) => {
+  try {
+    const { studentId, questionId, courseId } = req.query;
+    if (!studentId || !questionId) return res.status(400).json({ error: 'studentId and questionId required.' });
+    const filter = { studentId, questionId };
+    if (courseId) filter.courseId = courseId;
+    const subs = await Submission.find(filter).sort({ submittedAt: -1 });
+    res.json(subs);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
 // Helper — upsert grade after each submission
-async function updateGrade(studentId, courseId, questionId, questionTitle, score) {
+async function updateGrade(studentId, courseId, questionId, questionTitle, score, rollNumber = '') {
   try {
     let grade = await Grade.findOne({ studentId, courseId });
     if (!grade) {
-      grade = new Grade({ studentId, courseId, grades: [], totalScore: 0 });
+      grade = new Grade({ studentId, courseId, rollNumber, grades: [], totalScore: 0 });
+    } else if (rollNumber && !grade.rollNumber) {
+      grade.rollNumber = rollNumber;
     }
     const idx = grade.grades.findIndex(g => g.questionId.toString() === questionId.toString());
     if (idx === -1) {

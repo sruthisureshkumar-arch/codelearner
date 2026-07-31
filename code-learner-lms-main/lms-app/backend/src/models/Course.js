@@ -2,11 +2,12 @@ const mongoose = require('mongoose');
 const bcrypt   = require('bcryptjs');
 
 const courseSchema = new mongoose.Schema({
-  name:         { type: String, required: true, trim: true },
-  description:  { type: String, default: '', trim: true },
-  code:         { type: String, required: true, unique: true, uppercase: true, trim: true },
-  passwordHash: { type: String, required: true },
-  createdBy:    { type: String, required: true }, // teacher username
+  name:               { type: String, required: true, trim: true },
+  description:        { type: String, default: '', trim: true },
+  code:               { type: String, required: true, unique: true, uppercase: true, trim: true },
+  passwordHash:       { type: String, required: true },
+  enrollmentPassword: { type: String, default: '' }, // plaintext kept for teacher display
+  createdBy:          { type: String, required: true },
 }, { timestamps: true });
 
 // Hash the enrollment password before saving, only if it changed

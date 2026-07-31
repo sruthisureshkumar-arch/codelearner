@@ -5,7 +5,10 @@ const Submission = require('../models/Submission');
 // GET /api/sessions/course/:courseId
 exports.getSessions = async (req, res) => {
   try {
-    const sessions = await Session.find({ courseId: req.params.courseId }).sort({ createdAt: -1 });
+    const isTeacher = req.user.role === 'teacher';
+    const filter = { courseId: req.params.courseId };
+    if (!isTeacher) filter.isActive = true;
+    const sessions = await Session.find(filter).sort({ createdAt: -1 });
     res.json(sessions);
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
@@ -22,14 +25,13 @@ exports.getSession = async (req, res) => {
 // POST /api/sessions  (teacher only)
 exports.createSession = async (req, res) => {
   try {
-    const { name, description, courseId, isTimed, durationMinutes, allowMultipleAttempts } = req.body;
+    const { name, description, courseId, isTimed, durationMinutes } = req.body;
     if (!name || !courseId) return res.status(400).json({ error: 'name and courseId are required.' });
     const session = await Session.create({
       name, description, courseId,
       createdBy: req.user.username,
-      isTimed:               !!isTimed,
-      durationMinutes:       durationMinutes || 30,
-      allowMultipleAttempts: allowMultipleAttempts !== false,
+      isTimed:         !!isTimed,
+      durationMinutes: durationMinutes || 30,
       questions: [],
     });
     res.status(201).json(session);
@@ -41,9 +43,10 @@ exports.updateSession = async (req, res) => {
   try {
     const session = await Session.findById(req.params.id);
     if (!session) return res.status(404).json({ error: 'Not found.' });
-    const fields = ['name', 'description', 'isTimed', 'durationMinutes', 'allowMultipleAttempts', 'questions'];
+    const fields = ['name', 'description', 'isTimed', 'durationMinutes', 'isActive', 'questions'];
     fields.forEach(f => { if (req.body[f] !== undefined) session[f] = req.body[f]; });
-    res.json(await session.save());
+    const saved = await session.save();
+    res.json(saved);
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
@@ -52,8 +55,8 @@ exports.deleteSession = async (req, res) => {
   try {
     const session = await Session.findByIdAndDelete(req.params.id);
     if (!session) return res.status(404).json({ error: 'Not found.' });
-    // Delete all questions in this session
-    await Question.deleteMany({ _id: { $in: session.questions } });
+    // Delete only non-pool questions (pool questions belong to the course, not this session)
+    await Question.deleteMany({ _id: { $in: session.questions }, inPool: { $ne: true } });
     res.json({ message: 'Session deleted.' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
@@ -86,8 +89,77 @@ exports.removeQuestion = async (req, res) => {
     if (!session) return res.status(404).json({ error: 'Session not found.' });
     session.questions = session.questions.filter(q => q.toString() !== req.params.qid);
     await session.save();
-    await Question.findByIdAndDelete(req.params.qid);
+    // Only delete the question from DB if it's NOT a pool question
+    const q = await Question.findById(req.params.qid);
+    if (q && !q.inPool) await q.deleteOne();
     res.json(await session.populate('questions'));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
+// POST /api/sessions/:id/questions/from-pool  — link a pool question into this session
+exports.addFromPool = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Session not found.' });
+    const { questionIds } = req.body; // array of IDs
+    if (!Array.isArray(questionIds) || !questionIds.length)
+      return res.status(400).json({ error: 'questionIds array required.' });
+    const existing = new Set(session.questions.map(id => id.toString()));
+    for (const qid of questionIds) {
+      if (!existing.has(qid)) { session.questions.push(qid); existing.add(qid); }
+    }
+    await session.save();
+    res.json(await session.populate('questions'));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
+// POST /api/sessions/:id/randomize
+// Body options:
+//   Simple mode:  { count, replace, language }
+//   Topic mode:   { topicConfig: [{ topic, count }], replace }
+exports.randomizeFromPool = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Session not found.' });
+
+    const { replace = false, topicConfig, count = 5, language } = req.body;
+    const shuffle = arr => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+
+    let picked = [];
+
+    if (Array.isArray(topicConfig) && topicConfig.length) {
+      // Topic-wise mode: pick N from each specified topic
+      for (const { topic, count: n } of topicConfig) {
+        if (!topic || !n) continue;
+        const qs = await Question.find({ courseId: session.courseId, inPool: true, topic: new RegExp(`^${topic}$`, 'i') });
+        picked.push(...shuffle(qs).slice(0, Number(n)));
+      }
+    } else {
+      // Simple mode: pick N total, optionally filtered by language
+      const filter = { courseId: session.courseId, inPool: true };
+      if (language) filter.language = language;
+      const qs = await Question.find(filter);
+      picked = shuffle(qs).slice(0, Math.min(Number(count), qs.length));
+    }
+
+    if (!picked.length) return res.status(400).json({ error: 'No matching questions found in pool.' });
+
+    if (replace) {
+      session.questions = picked.map(q => q._id);
+    } else {
+      const existing = new Set(session.questions.map(id => id.toString()));
+      for (const q of picked) {
+        if (!existing.has(q._id.toString())) { session.questions.push(q._id); existing.add(q._id.toString()); }
+      }
+    }
+    await session.save();
+    res.json({ session: await session.populate('questions'), picked: picked.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 

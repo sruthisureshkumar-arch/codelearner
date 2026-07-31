@@ -12,4 +12,7 @@ router.get('/question/:questionId', authenticate, requireRole('teacher'), ctrl.g
 // A student can view their own history; a teacher can view any student's history
 router.get('/student/:studentId', authenticate, ctrl.getStudentHistory);
 
+// Teacher drills into a student's full submission history for one question
+router.get('/history', authenticate, requireRole('teacher'), ctrl.getSubmissionHistory);
+
 module.exports = router;

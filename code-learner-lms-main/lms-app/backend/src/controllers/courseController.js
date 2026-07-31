@@ -55,7 +55,8 @@ exports.createCourse = async (req, res) => {
       name: name.trim(),
       description: (description || '').trim(),
       code,
-      passwordHash: password, // hashed by pre-save hook
+      passwordHash: password,       // hashed by pre-save hook
+      enrollmentPassword: password, // plaintext for teacher display
       createdBy: req.user.username,
     });
 
