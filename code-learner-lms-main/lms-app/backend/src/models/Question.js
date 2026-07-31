@@ -23,6 +23,7 @@ const questionSchema = new mongoose.Schema(
     createdBy: { type: String, required: true },
     difficulty: { type: String, enum: ['easy', 'medium', 'hard'], default: 'medium' },
     hideTestCases: { type: Boolean, default: false },
+    maxAttempts:   { type: Number, default: 0 },       // 0 = unlimited
     inPool:        { type: Boolean, default: false },  // true = question lives in the question pool
     topic:         { type: String, default: '' },      // e.g. "Arrays", "Sorting", "Recursion"
   },

@@ -329,9 +329,21 @@ const QuestionCard = ({ q, index, onUpdate, onToggleVisibility, onRemove, sessio
             {q.hideTestCases && <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, fontWeight: 500, background: '#fff3cd', color: '#856404' }}>Test cases hidden</span>}
           </div>
         </div>
-        {onRemove && (
-          <button onClick={() => { if(window.confirm('Remove this question from the session?')) onRemove(q._id); }} style={{ ...s.btnRed, padding: '4px 10px', fontSize: 12, flexShrink: 0 }}>Remove</button>
-        )}
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button
+            onClick={async () => {
+              try {
+                const res = await axios.post(`/api/questions/${q._id}/duplicate`);
+                alert(`✓ Duplicated as "${res.data.title}"`);
+              } catch(e) { alert('Duplicate failed: ' + (e.response?.data?.error || e.message)); }
+            }}
+            style={{ ...s.btnGray, padding: '4px 10px', fontSize: 12 }}
+            title="Duplicate this question"
+          >⧉ Copy</button>
+          {onRemove && (
+            <button onClick={() => { if(window.confirm('Remove this question from the session?')) onRemove(q._id); }} style={{ ...s.btnRed, padding: '4px 10px', fontSize: 12 }}>Remove</button>
+          )}
+        </div>
       </div>
 
       <div style={{ borderBottom: '1px solid #dee2e6', background: '#f8f9fa', display: 'flex' }}>
@@ -577,11 +589,20 @@ const GradebookView = ({ courseId }) => {
 
       {/* Header */}
       <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #dee2e6', overflow: 'hidden', marginBottom: 16 }}>
-        <div style={{ background: '#0f6cbf', padding: '14px 20px' }}>
-          <h2 style={{ margin: 0, color: '#fff', fontSize: 18, fontWeight: 600 }}>Gradebook — {courseId}</h2>
-          <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 }}>
-            Grouped by session · Sorted by roll number · Click a question row to view submission history
+        <div style={{ background: '#0f6cbf', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h2 style={{ margin: 0, color: '#fff', fontSize: 18, fontWeight: 600 }}>Gradebook — {courseId}</h2>
+            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 }}>
+              Grouped by session · Sorted by roll number · Click a question row to view submission history
+            </div>
           </div>
+          <a
+            href={`/api/grades/export/${courseId}`}
+            download
+            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 500, textDecoration: 'none', cursor: 'pointer' }}
+          >
+            ⬇ Export CSV
+          </a>
         </div>
       </div>
 
@@ -1140,7 +1161,7 @@ const CoursesView = ({ courses, activeCourseCode, onSwitchCourse, onCoursesChang
 
 /* ── Add question form (within a session) ── */
 const AddQuestionForm = ({ sessionId, courseId, onAdded, onCancel }) => {
-  const [form, setForm] = useState({ title: '', description: '', difficulty: 'medium', language: 'c', placeholderCode: '', driverPreCode: '', driverPostCode: '', hideTestCases: false });
+  const [form, setForm] = useState({ title: '', description: '', difficulty: 'medium', language: 'c', placeholderCode: '', driverPreCode: '', driverPostCode: '', hideTestCases: false, maxAttempts: 0 });
   const [testCases, setTestCases] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -1212,6 +1233,16 @@ const AddQuestionForm = ({ sessionId, courseId, onAdded, onCancel }) => {
           </div>
           <TestCaseEditor cases={testCases} onChange={setTestCases} language={form.language} />
         </div>
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <label style={{ ...s.label, marginBottom: 0, flexShrink: 0 }}>Max attempts</label>
+          <input
+            type="number" min={0} max={999}
+            value={form.maxAttempts}
+            onChange={e => setForm({ ...form, maxAttempts: parseInt(e.target.value) || 0 })}
+            style={{ ...s.input, width: 90 }}
+          />
+          <span style={{ fontSize: 12, color: '#888' }}>0 = unlimited</span>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="submit" disabled={saving} style={s.btnBlue}>{saving ? 'Adding…' : 'Add question'}</button>
           <button type="button" onClick={onCancel} style={s.btnGray}>Cancel</button>
@@ -1226,6 +1257,7 @@ const SessionDetail = ({ session, courseId, onBack, onSessionUpdated }) => {
   const [questions, setQuestions]   = useState(session.questions || []);
   const [showAddQ, setShowAddQ]     = useState(false);
   const [showPool, setShowPool]     = useState(false);
+  const [importing, setImporting]   = useState(false);
   const [showRandom, setShowRandom] = useState(false);
 
   const handleQuestionAdded = (data) => {
@@ -1312,9 +1344,32 @@ const SessionDetail = ({ session, courseId, onBack, onSessionUpdated }) => {
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#333' }}>
           Questions <span style={{ fontWeight: 400, color: '#888', fontSize: 14 }}>({questions.length})</span>
         </h3>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => setShowRandom(true)} style={s.btnGray}>🎲 Randomize</button>
           <button onClick={() => setShowPool(true)} style={s.btnGray}>📦 From pool</button>
+          <label style={{ ...s.btnGray, cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', margin: 0 }}>
+            {importing ? '⏳ Importing…' : '📥 Import JSON'}
+            <input
+              type="file" accept=".json" style={{ display: 'none' }}
+              disabled={importing}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                e.target.value = '';
+                setImporting(true);
+                try {
+                  const text = await file.text();
+                  const qs = JSON.parse(text);
+                  if (!Array.isArray(qs)) throw new Error('JSON must be an array of questions');
+                  const res = await axios.post('/api/questions/import', { questions: qs, sessionId: session._id, courseId });
+                  setQuestions(prev => [...prev, ...res.data]);
+                  alert(`✓ Imported ${res.data.length} question${res.data.length !== 1 ? 's' : ''}`);
+                } catch(err) {
+                  alert('Import failed: ' + (err.response?.data?.error || err.message));
+                } finally { setImporting(false); }
+              }}
+            />
+          </label>
           {!showAddQ && <button onClick={() => setShowAddQ(true)} style={s.btnBlue}>+ Add question</button>}
         </div>
       </div>
@@ -1346,6 +1401,7 @@ const SessionsView = ({ courseId, user }) => {
   const [loading, setLoading]         = useState(true);
   const [showCreate, setShowCreate]   = useState(false);
   const [activeSession, setActiveSession] = useState(null);
+  const [liveCounts, setLiveCounts]   = useState({}); // { sessionId: count }
   const [form, setForm] = useState({ name: '', description: '', isTimed: false, durationMinutes: 30 });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(null);
@@ -1360,6 +1416,25 @@ const SessionsView = ({ courseId, user }) => {
   }, [courseId]);
 
   useEffect(() => { setLoading(true); fetchSessions(); }, [fetchSessions]);
+
+  // Poll live submission counts for active sessions every 30s
+  useEffect(() => {
+    const poll = async () => {
+      const activeSessions = sessions.filter(s => s.isActive);
+      if (!activeSessions.length) return;
+      const results = await Promise.allSettled(
+        activeSessions.map(s => axios.get(`/api/submissions/live/${s._id}`))
+      );
+      const counts = {};
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') counts[activeSessions[i]._id] = r.value.data.count;
+      });
+      setLiveCounts(prev => ({ ...prev, ...counts }));
+    };
+    poll();
+    const id = setInterval(poll, 30000);
+    return () => clearInterval(id);
+  }, [sessions]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -1468,6 +1543,11 @@ const SessionsView = ({ courseId, user }) => {
                     </span>
                     {sess.isTimed && (
                       <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#fff3cd', color: '#856404', fontWeight: 500 }}>⏱ {sess.durationMinutes} min</span>
+                    )}
+                    {sess.isActive && liveCounts[sess._id] !== undefined && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: '#d4edda', color: '#155724', fontWeight: 500 }}>
+                        🟢 {liveCounts[sess._id]} submitting
+                      </span>
                     )}
                   </div>
                 </div>

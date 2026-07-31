@@ -29,6 +29,8 @@ router.patch('/:id/visibility', authenticate, requireRole('teacher'), questionCo
 router.post('/:id/generate-placeholder', authenticate, requireRole('teacher'), questionController.generatePlaceholder);
 
 // Delete question (teacher only)
-router.delete('/:id', authenticate, requireRole('teacher'), questionController.deleteQuestion);
+router.post('/import',    authenticate, requireRole('teacher'), questionController.importQuestions);
+router.post('/:id/duplicate', authenticate, requireRole('teacher'), questionController.duplicateQuestion);
+router.delete('/:id',    authenticate, requireRole('teacher'), questionController.deleteQuestion);
 
 module.exports = router;

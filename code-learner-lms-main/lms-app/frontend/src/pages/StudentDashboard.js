@@ -72,12 +72,31 @@ const SqlSchemaPanel = ({ setupSql }) => {
 
 /* ── Per-question code editor ── */
 const CodeEditor = ({ question, studentId, courseId, hideTestCases: forceHide, onAttempted }) => {
+  const lsKey = `code_draft_${question._id}`;
   const [lang, setLang]         = useState(question.language || '');
-  const [code, setCode]         = useState(question.placeholderCode || PLACEHOLDERS[question.language] || '');
+  const [code, setCode]         = useState(() => {
+    // Restore auto-saved draft; fall back to placeholder
+    try { return localStorage.getItem(lsKey) || question.placeholderCode || PLACEHOLDERS[question.language] || ''; }
+    catch { return question.placeholderCode || PLACEHOLDERS[question.language] || ''; }
+  });
   const [running, setRunning]   = useState(false);
   const [result, setResult]     = useState(null);
   const [revealed, setRevealed] = useState(false);
+  const [attemptsLeft, setAttemptsLeft] = useState(null); // null = unlimited or unknown
   const hideTC = forceHide || question.hideTestCases;
+
+  // Auto-save code to localStorage as student types
+  useEffect(() => {
+    try { localStorage.setItem(lsKey, code); } catch {}
+  }, [code, lsKey]);
+
+  // Fetch remaining attempts if question has a limit
+  useEffect(() => {
+    if (!question.maxAttempts || question.maxAttempts === 0) return;
+    axios.get('/api/submissions/attempts', { params: { questionId: question._id, studentUsername: studentId } })
+      .then(r => setAttemptsLeft(Math.max(0, question.maxAttempts - r.data.count)))
+      .catch(() => {});
+  }, [question._id, question.maxAttempts, studentId]);
 
   const runCode = async () => {
     if (!lang) { alert('Please select a language first.'); return; }
@@ -87,6 +106,10 @@ const CodeEditor = ({ question, studentId, courseId, hideTestCases: forceHide, o
       const res = await axios.post('/api/submissions', { questionId: question._id, courseId, studentId, language: lang, code });
       setResult(res.data);
       if (onAttempted) onAttempted(question._id);
+      // Refresh attempt count
+      if (question.maxAttempts > 0) {
+        setAttemptsLeft(prev => prev !== null ? Math.max(0, prev - 1) : null);
+      }
     } catch (e) {
       setResult({ executionError: e.response?.data?.error || e.message, testResults: [] });
       if (onAttempted) onAttempted(question._id);
@@ -97,13 +120,19 @@ const CodeEditor = ({ question, studentId, courseId, hideTestCases: forceHide, o
     <div style={{ padding: '14px 20px', borderTop: '1px solid #f0f0f0' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5 }}>Your code</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <label style={{ fontSize: 12, color: '#666' }}>Language:</label>
           <select value={lang} onChange={e => setLang(e.target.value)} style={{ ...s.input, width: 170, padding: '4px 8px', fontSize: 12 }}>
             <option value="">— Choose —</option>
             {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
-          <button onClick={runCode} disabled={running || !lang || !code.trim()} style={{ ...s.btnBlue, padding: '5px 16px', fontSize: 12, opacity: (running || !lang || !code.trim()) ? 0.6 : 1 }}>
+          {attemptsLeft !== null && (
+            <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: attemptsLeft > 0 ? '#fff3cd' : '#f8d7da', color: attemptsLeft > 0 ? '#856404' : '#721c24', fontWeight: 600 }}>
+              {attemptsLeft > 0 ? `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} left` : 'No attempts left'}
+            </span>
+          )}
+          <span style={{ fontSize: 10, color: '#aaa' }}>💾 auto-saved</span>
+          <button onClick={runCode} disabled={running || !lang || !code.trim() || attemptsLeft === 0} style={{ ...s.btnBlue, padding: '5px 16px', fontSize: 12, opacity: (running || !lang || !code.trim() || attemptsLeft === 0) ? 0.6 : 1 }}>
             {running ? '⏳ Running…' : '▶ Run'}
           </button>
         </div>
@@ -417,6 +446,12 @@ const StudentSessionsView = ({ courseId, studentId, rollNumber }) => {
   }, [courseId]);
 
   useEffect(() => { setLoading(true); fetchSessions(); }, [fetchSessions]);
+
+  // Poll every 30 seconds so students see session open/close without manual refresh
+  useEffect(() => {
+    const id = setInterval(() => { fetchSessions(); }, 30000);
+    return () => clearInterval(id);
+  }, [fetchSessions]);
 
   const openSession = async (sess) => {
     try {

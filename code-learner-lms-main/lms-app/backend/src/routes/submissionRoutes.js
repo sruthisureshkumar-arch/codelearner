@@ -14,5 +14,9 @@ router.get('/student/:studentId', authenticate, ctrl.getStudentHistory);
 
 // Teacher drills into a student's full submission history for one question
 router.get('/history', authenticate, requireRole('teacher'), ctrl.getSubmissionHistory);
+// Live submission counts for a session (teacher polling during exams)
+router.get('/live/:sessionId', authenticate, requireRole('teacher'), ctrl.getLiveCount);
+// Attempt count for a specific student+question
+router.get('/attempts', authenticate, ctrl.getAttemptCount);
 
 module.exports = router;

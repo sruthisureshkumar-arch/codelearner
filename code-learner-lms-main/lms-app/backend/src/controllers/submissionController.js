@@ -296,6 +296,14 @@ exports.submitCode = async (req, res) => {
       }
     }
 
+    // Enforce maxAttempts limit (0 = unlimited)
+    if (question.maxAttempts > 0) {
+      const attemptCount = await Submission.countDocuments({ questionId, studentUsername });
+      if (attemptCount >= question.maxAttempts) {
+        return res.status(403).json({ error: `Maximum attempts (${question.maxAttempts}) reached for this question.` });
+      }
+    }
+
     // Combine driver pre-code + student code + driver post-code (LeetCode-style)
     const pre  = (question.driverPreCode  || '').trim();
     const post = (question.driverPostCode || '').trim();
@@ -451,6 +459,32 @@ exports.getSubmissionHistory = async (req, res) => {
     if (courseId) filter.courseId = courseId;
     const subs = await Submission.find(filter).sort({ submittedAt: -1 });
     res.json(subs);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// GET /api/submissions/live/:sessionId — live submission counts for a session (teacher)
+exports.getLiveCount = async (req, res) => {
+  try {
+    const session = await Session.findById(req.params.sessionId).lean();
+    if (!session) return res.status(404).json({ error: 'Session not found.' });
+
+    const questionIds = (session.questions || []).map(id => id.toString());
+    const counts = await Promise.all(questionIds.map(async (qid) => {
+      const total    = await Submission.countDocuments({ questionId: qid });
+      const distinct = await Submission.distinct('studentUsername', { questionId: qid });
+      return { questionId: qid, totalSubmissions: total, studentsAttempted: distinct.length };
+    }));
+    res.json({ sessionId: session._id, isActive: session.isActive, counts });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// GET /api/submissions/attempts?questionId=X&studentUsername=Y
+exports.getAttemptCount = async (req, res) => {
+  try {
+    const { questionId, studentUsername } = req.query;
+    if (!questionId || !studentUsername) return res.status(400).json({ error: 'questionId and studentUsername required.' });
+    const count = await Submission.countDocuments({ questionId, studentUsername });
+    res.json({ count });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 

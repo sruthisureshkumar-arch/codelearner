@@ -142,6 +142,60 @@ exports.deleteQuestion = async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
+// POST /api/questions/:id/duplicate — clone a question
+exports.duplicateQuestion = async (req, res) => {
+  try {
+    const src = await Question.findById(req.params.id);
+    if (!src) return res.status(404).json({ error: 'Not found' });
+    const obj = src.toObject();
+    delete obj._id; delete obj.createdAt; delete obj.updatedAt;
+    obj.title = `${obj.title} (copy)`;
+    // give each test case a fresh _id
+    obj.testCases = (obj.testCases || []).map(tc => ({ ...tc, _id: undefined }));
+    const copy = await Question.create(obj);
+    res.status(201).json(copy);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
+// POST /api/questions/import — bulk import questions into a session
+// Body: { sessionId, courseId, questions: [{ title, description, difficulty, language, placeholderCode, driverPreCode, driverPostCode, testCases, topic }] }
+exports.importQuestions = async (req, res) => {
+  try {
+    const { sessionId, courseId, questions: incoming } = req.body;
+    if (!Array.isArray(incoming) || !incoming.length) {
+      return res.status(400).json({ error: 'questions array is required.' });
+    }
+    const Session = require('../models/Session');
+    const created = [];
+    for (const q of incoming) {
+      const doc = await Question.create({
+        title:          q.title       || 'Untitled',
+        description:    q.description || '',
+        courseId:       courseId,
+        createdBy:      req.user.username,
+        difficulty:     q.difficulty  || 'medium',
+        language:       q.language    || 'c',
+        placeholderCode: q.placeholderCode || '',
+        driverPreCode:  q.driverPreCode  || '',
+        driverPostCode: q.driverPostCode || '',
+        testCases:      q.testCases      || [],
+        hideTestCases:  !!q.hideTestCases,
+        maxAttempts:    q.maxAttempts    || 0,
+        topic:          q.topic          || '',
+        inPool:         !!q.inPool,
+      });
+      created.push(doc);
+    }
+    // If a sessionId was provided, link questions to the session
+    if (sessionId) {
+      await Session.findByIdAndUpdate(sessionId, {
+        $addToSet: { questions: { $each: created.map(d => d._id) } },
+      });
+    }
+    res.status(201).json({ imported: created.length, questions: created });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
 /* POST /api/questions/:id/generate-placeholder — generate starter code with local AI */
 exports.generatePlaceholder = async (req, res) => {
   try {
