@@ -8,6 +8,23 @@ import StudentDashboard from './pages/StudentDashboard';
 function App() {
   const [auth, setAuth] = useState(null);
   const [checking, setChecking] = useState(true);
+
+  // Auto-logout when any request gets a 401 (expired/invalid token)
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      res => res,
+      err => {
+        if (err.response?.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          delete axios.defaults.headers.common['Authorization'];
+          setAuth(null);
+        }
+        return Promise.reject(err);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, []);
   const [courses, setCourses] = useState([]);
   const [activeCourseCode, setActiveCourseCode] = useState(null);
 

@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('⚠️  WARNING: JWT_SECRET is not set in .env — using insecure fallback. Set it before deploying!');
+}
+const _JWT_SECRET = JWT_SECRET || 'dev_secret_CHANGE_ME';
 
 // Verifies the Bearer token and attaches { id, username, name, role, courseId } to req.user
 function authenticate(req, res, next) {
@@ -12,7 +16,7 @@ function authenticate(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, _JWT_SECRET);
     req.user = payload;
     next();
   } catch (err) {

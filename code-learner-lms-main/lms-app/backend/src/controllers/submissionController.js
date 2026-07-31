@@ -5,6 +5,7 @@ const path      = require('path');
 const os        = require('os');
 const Submission = require('../models/Submission');
 const Question   = require('../models/Question');
+const Session    = require('../models/Session');
 const Grade      = require('../models/Grade');
 const Enrollment = require('../models/Enrollment');
 
@@ -68,10 +69,26 @@ function runMips(code, stdin = '') {
         return resolve({ output: null, error: `MIPS program timed out or was killed (${signal}).` });
       }
 
-      // Strip SPIM header lines (everything up to and including the last "Loaded:" line)
+      // Strip SPIM header lines — both macOS and Linux SPIM emit a header block
+      // ending with a "Loaded:" line. If none found, also strip the common
+      // "SPIM Version..." / "Copyright" / "All Rights Reserved" preamble lines.
       const lines = stdout.split('\n');
       const lastLoaded = lines.reduce((acc, l, i) => l.startsWith('Loaded:') ? i : acc, -1);
-      const clean = lines.slice(lastLoaded + 1).join('\n').trim();
+      let clean;
+      if (lastLoaded !== -1) {
+        clean = lines.slice(lastLoaded + 1).join('\n').trim();
+      } else {
+        // Linux SPIM may not print "Loaded:" — strip known header patterns instead
+        const firstContent = lines.findIndex(l =>
+          l.trim() &&
+          !/^SPIM\s/i.test(l) &&
+          !/^Copyright/i.test(l) &&
+          !/^All Rights/i.test(l) &&
+          !/^See the file/i.test(l) &&
+          !/^\s*$/.test(l)
+        );
+        clean = lines.slice(firstContent === -1 ? 0 : firstContent).join('\n').trim();
+      }
 
       // SPIM prints assembly/runtime errors in stdout prefixed with "spim:",
       // and sometimes as "Exception occurred ..." lines.
@@ -271,6 +288,14 @@ exports.submitCode = async (req, res) => {
     const question = await Question.findById(questionId);
     if (!question) return res.status(404).json({ error: 'Question not found.' });
 
+    // Block submissions to closed sessions (students only — teachers can always submit)
+    if (req.user.role === 'student') {
+      const session = await Session.findOne({ questions: questionId, courseId: (courseId || question.courseId || '').toUpperCase() });
+      if (session && !session.isActive) {
+        return res.status(403).json({ error: 'This session is closed. Submissions are no longer accepted.' });
+      }
+    }
+
     // Combine driver pre-code + student code + driver post-code (LeetCode-style)
     const pre  = (question.driverPreCode  || '').trim();
     const post = (question.driverPostCode || '').trim();
@@ -429,28 +454,42 @@ exports.getSubmissionHistory = async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
-// Helper — upsert grade after each submission
+// Helper — upsert grade after each submission (atomic to avoid race conditions)
 async function updateGrade(studentId, courseId, questionId, questionTitle, score, rollNumber = '') {
   try {
-    let grade = await Grade.findOne({ studentId, courseId });
-    if (!grade) {
-      grade = new Grade({ studentId, courseId, rollNumber, grades: [], totalScore: 0 });
-    } else if (rollNumber && !grade.rollNumber) {
-      grade.rollNumber = rollNumber;
+    const qIdStr = questionId.toString();
+
+    // Atomically increment attempts and update bestScore if improved
+    const existing = await Grade.findOneAndUpdate(
+      { studentId, courseId, 'grades.questionId': questionId },
+      {
+        $inc:  { 'grades.$.attempts': 1 },
+        $max:  { 'grades.$.bestScore': score },
+        $set:  { 'grades.$.lastSubmittedAt': new Date(), updatedAt: new Date() },
+        ...(rollNumber ? { $setOnInsert: { rollNumber } } : {}),
+      },
+      { new: true }
+    );
+
+    if (!existing) {
+      // First submission for this question — push a new grade entry
+      await Grade.findOneAndUpdate(
+        { studentId, courseId },
+        {
+          $push: { grades: { questionId, questionTitle, bestScore: score, attempts: 1, lastSubmittedAt: new Date() } },
+          $setOnInsert: { rollNumber, totalScore: 0 },
+          $set: { updatedAt: new Date() },
+        },
+        { upsert: true, new: true }
+      );
     }
-    const idx = grade.grades.findIndex(g => g.questionId.toString() === questionId.toString());
-    if (idx === -1) {
-      grade.grades.push({ questionId, questionTitle, bestScore: score, attempts: 1, lastSubmittedAt: new Date() });
-    } else {
-      grade.grades[idx].attempts += 1;
-      grade.grades[idx].lastSubmittedAt = new Date();
-      if (score > grade.grades[idx].bestScore) grade.grades[idx].bestScore = score;
+
+    // Recalculate totalScore as average of all bestScores
+    const grade = await Grade.findOne({ studentId, courseId });
+    if (grade && grade.grades.length > 0) {
+      const avg = Math.round(grade.grades.reduce((s, g) => s + g.bestScore, 0) / grade.grades.length);
+      await Grade.updateOne({ studentId, courseId }, { $set: { totalScore: avg } });
     }
-    // total = average of best scores
-    const total = grade.grades.reduce((sum, g) => sum + g.bestScore, 0);
-    grade.totalScore = grade.grades.length > 0 ? Math.round(total / grade.grades.length) : 0;
-    grade.updatedAt = new Date();
-    await grade.save();
   } catch (e) {
     console.error('updateGrade error:', e.message);
   }
