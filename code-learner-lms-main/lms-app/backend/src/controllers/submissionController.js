@@ -108,7 +108,7 @@ function runMips(code, stdin = '') {
     proc.on('error', (err) => {
       cleanup();
       if (err.code === 'ENOENT') {
-        resolve({ output: null, error: 'SPIM is not installed. Run: brew install spim' });
+        resolve({ output: null, error: 'SPIM is not installed on the server. Run: sudo apt install spim  (or brew install spim on macOS)' });
       } else {
         resolve({ output: null, error: err.message });
       }
@@ -140,7 +140,7 @@ function runFlex(code, stdin = '') {
     flex.on('error', (err) => {
       cleanup();
       if (err.code === 'ENOENT') {
-        resolve({ output: null, error: 'flex is not installed. Run: brew install flex' });
+        resolve({ output: null, error: 'flex is not installed on the server. Run: sudo apt install flex  (or brew install flex on macOS)' });
       } else {
         resolve({ output: null, error: err.message });
       }
@@ -474,7 +474,10 @@ exports.getLiveCount = async (req, res) => {
       const distinct = await Submission.distinct('studentUsername', { questionId: qid });
       return { questionId: qid, totalSubmissions: total, studentsAttempted: distinct.length };
     }));
-    res.json({ sessionId: session._id, isActive: session.isActive, counts });
+    // `count` = total unique students who have submitted at least one answer in this session
+    const count = new Set(counts.flatMap(c => [])).size ||
+      (await Submission.distinct('studentUsername', { questionId: { $in: questionIds } })).length;
+    res.json({ sessionId: session._id, isActive: session.isActive, count, counts });
   } catch (err) { res.status(500).json({ error: err.message }); }
 };
 

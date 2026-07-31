@@ -13,8 +13,22 @@ const sessionRoutes     = require('./routes/sessionRoutes');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// CORS — allow the frontend origin (set FRONTEND_URL in .env)
+const allowedOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (mobile apps, curl, same-server nginx)
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+}));
+
 app.use(bodyParser.json({ limit: '200kb' }));           // cap request size
 app.use(bodyParser.urlencoded({ extended: true, limit: '200kb' }));
 

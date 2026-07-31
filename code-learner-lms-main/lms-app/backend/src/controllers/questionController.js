@@ -108,7 +108,7 @@ exports.updateQuestion = async (req, res) => {
   try {
     const question = await Question.findById(req.params.id);
     if (!question) return res.status(404).json({ error: 'Not found' });
-    const fields = ['title', 'description', 'answer', 'isAnswerVisible', 'difficulty', 'placeholderCode', 'driverPreCode', 'driverPostCode', 'language', 'testCases', 'hideTestCases', 'topic'];
+    const fields = ['title', 'description', 'answer', 'isAnswerVisible', 'difficulty', 'placeholderCode', 'driverPreCode', 'driverPostCode', 'language', 'testCases', 'hideTestCases', 'maxAttempts', 'topic'];
     fields.forEach(f => { if (req.body[f] !== undefined) question[f] = req.body[f]; });
     res.json(await question.save());
   } catch (e) { res.status(500).json({ error: e.message }); }

@@ -1362,8 +1362,9 @@ const SessionDetail = ({ session, courseId, onBack, onSessionUpdated }) => {
                   const qs = JSON.parse(text);
                   if (!Array.isArray(qs)) throw new Error('JSON must be an array of questions');
                   const res = await axios.post('/api/questions/import', { questions: qs, sessionId: session._id, courseId });
-                  setQuestions(prev => [...prev, ...res.data]);
-                  alert(`✓ Imported ${res.data.length} question${res.data.length !== 1 ? 's' : ''}`);
+                  const imported = res.data.questions || res.data;
+                  setQuestions(prev => [...prev, ...imported]);
+                  alert(`✓ Imported ${res.data.imported ?? imported.length} question${(res.data.imported ?? imported.length) !== 1 ? 's' : ''}`);
                 } catch(err) {
                   alert('Import failed: ' + (err.response?.data?.error || err.message));
                 } finally { setImporting(false); }
