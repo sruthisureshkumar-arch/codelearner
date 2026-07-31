@@ -67,7 +67,7 @@ exports.getPoolQuestions = async (req, res) => {
 // POST /api/questions/pool — create a standalone pool question
 exports.createPoolQuestion = async (req, res) => {
   try {
-    const { title, description, courseId, difficulty, language, placeholderCode, driverPreCode, driverPostCode, testCases, hideTestCases, topic } = req.body;
+    const { title, description, courseId, difficulty, language, placeholderCode, driverPreCode, driverPostCode, testCases, hideTestCases, maxAttempts, topic } = req.body;
     if (!title || !description || !courseId) return res.status(400).json({ error: 'title, description and courseId are required.' });
     const q = await Question.create({
       title, description, courseId,
@@ -79,6 +79,7 @@ exports.createPoolQuestion = async (req, res) => {
       driverPostCode: driverPostCode || '',
       testCases: testCases || [],
       hideTestCases: !!hideTestCases,
+      maxAttempts: maxAttempts || 0,
       topic: topic || '',
       inPool: true,
     });

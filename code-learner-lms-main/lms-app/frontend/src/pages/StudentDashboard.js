@@ -71,7 +71,7 @@ const SqlSchemaPanel = ({ setupSql }) => {
 };
 
 /* ── Per-question code editor ── */
-const CodeEditor = ({ question, studentId, courseId, hideTestCases: forceHide, onAttempted }) => {
+const CodeEditor = ({ question, studentId, studentUsername, courseId, hideTestCases: forceHide, onAttempted }) => {
   const lsKey = `code_draft_${question._id}`;
   const [lang, setLang]         = useState(question.language || '');
   const [code, setCode]         = useState(() => {
@@ -93,7 +93,7 @@ const CodeEditor = ({ question, studentId, courseId, hideTestCases: forceHide, o
   // Fetch remaining attempts if question has a limit
   useEffect(() => {
     if (!question.maxAttempts || question.maxAttempts === 0) return;
-    axios.get('/api/submissions/attempts', { params: { questionId: question._id, studentUsername: studentId } })
+    axios.get('/api/submissions/attempts', { params: { questionId: question._id, studentUsername: studentUsername || studentId } })
       .then(r => setAttemptsLeft(Math.max(0, question.maxAttempts - r.data.count)))
       .catch(() => {});
   }, [question._id, question.maxAttempts, studentId]);
@@ -413,7 +413,7 @@ const SessionExperience = ({ session, courseId, studentId, rollNumber, onExit })
                   </div>
                 </div>
               </div>
-              <CodeEditor key={q._id} question={q} studentId={studentId} courseId={courseId} hideTestCases={q.hideTestCases} onAttempted={handleAttempted} />
+              <CodeEditor key={q._id} question={q} studentId={studentId} studentUsername={studentUsername} courseId={courseId} hideTestCases={q.hideTestCases} onAttempted={handleAttempted} />
               {/* Navigation arrows */}
               <div style={{ padding: '12px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
                 <button onClick={() => setCurrentIdx(i => Math.max(0, i - 1))} disabled={currentIdx === 0} style={{ ...s.btnGray, opacity: currentIdx === 0 ? 0.4 : 1 }}>← Previous</button>
@@ -431,7 +431,7 @@ const SessionExperience = ({ session, courseId, studentId, rollNumber, onExit })
 };
 
 /* ── Sessions list (student view) ── */
-const StudentSessionsView = ({ courseId, studentId, rollNumber }) => {
+const StudentSessionsView = ({ courseId, studentId, studentUsername, rollNumber }) => {
   const [sessions, setSessions]         = useState([]);
   const [loading, setLoading]           = useState(true);
   const [activeSession, setActiveSession] = useState(null);
@@ -725,7 +725,8 @@ const StudentCoursesView = ({ courses, activeCourseCode, onSwitchCourse, onCours
 
 /* ── Main Dashboard ── */
 const StudentDashboard = ({ courseId = 'course-001', user, courses = [], activeCourseCode, onCoursesChanged, onSwitchCourse }) => {
-  const studentId = user?.name || '';
+  const studentId       = user?.name     || '';   // display name — used for submission lookup
+  const studentUsername = user?.username || '';   // login username — used for attempt count
   const [activeSection, setActiveSection]     = useState('courses');
   const [unlockedCourses, setUnlockedCourses] = useState(new Set());
 
@@ -768,7 +769,7 @@ const StudentDashboard = ({ courseId = 'course-001', user, courses = [], activeC
         )}
 
         {activeSection === 'sessions' && !noActiveCourse && !isLocked && (
-          <StudentSessionsView courseId={courseId} studentId={studentId} rollNumber={activeCourse?.rollNumber || user?.rollNumber || ''} />
+          <StudentSessionsView courseId={courseId} studentId={studentId} studentUsername={studentUsername} rollNumber={activeCourse?.rollNumber || user?.rollNumber || ''} />
         )}
 
         {activeSection === 'history' && !noActiveCourse && !isLocked && (

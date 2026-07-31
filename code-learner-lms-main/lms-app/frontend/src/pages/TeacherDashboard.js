@@ -596,13 +596,21 @@ const GradebookView = ({ courseId }) => {
               Grouped by session · Sorted by roll number · Click a question row to view submission history
             </div>
           </div>
-          <a
-            href={`/api/grades/export/${courseId}`}
-            download
-            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 500, textDecoration: 'none', cursor: 'pointer' }}
+          <button
+            onClick={async () => {
+              try {
+                const res = await axios.get(`/api/grades/export/${courseId}`, { responseType: 'blob' });
+                const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+                const a = document.createElement('a');
+                a.href = url; a.download = `gradebook-${courseId}.csv`;
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a); URL.revokeObjectURL(url);
+              } catch(e) { alert('Export failed: ' + (e.response?.data?.error || e.message)); }
+            }}
+            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
           >
             ⬇ Export CSV
-          </a>
+          </button>
         </div>
       </div>
 

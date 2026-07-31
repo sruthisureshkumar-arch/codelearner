@@ -66,13 +66,23 @@ exports.addQuestion = async (req, res) => {
   try {
     const session = await Session.findById(req.params.id);
     if (!session) return res.status(404).json({ error: 'Session not found.' });
-    const { title, description, difficulty, language, placeholderCode, testCases, hideTestCases } = req.body;
+    const {
+      title, description, difficulty, language,
+      placeholderCode, driverPreCode, driverPostCode,
+      testCases, hideTestCases, maxAttempts,
+      answer, isAnswerVisible,
+    } = req.body;
     if (!title || !description || !language) return res.status(400).json({ error: 'title, description and language are required.' });
     const question = await Question.create({
       title, description, difficulty: difficulty || 'medium',
       language, placeholderCode: placeholderCode || '',
+      driverPreCode:  driverPreCode  || '',
+      driverPostCode: driverPostCode || '',
       testCases: testCases || [],
       hideTestCases: !!hideTestCases,
+      maxAttempts: maxAttempts || 0,
+      answer: answer || null,
+      isAnswerVisible: !!isAnswerVisible,
       courseId: session.courseId,
       createdBy: req.user.username,
     });
