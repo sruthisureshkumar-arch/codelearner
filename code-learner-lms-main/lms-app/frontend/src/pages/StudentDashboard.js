@@ -247,7 +247,7 @@ const CodeEditor = ({ question, studentId, studentUsername, courseId, hideTestCa
 };
 
 /* ── Session experience (timed, with progress bar + navigator) ── */
-const SessionExperience = ({ session, courseId, studentId, rollNumber, onExit }) => {
+const SessionExperience = ({ session, courseId, studentId, studentUsername, rollNumber, onExit }) => {
   const questions = session.questions || [];
   const total = questions.length;
 
@@ -466,6 +466,7 @@ const StudentSessionsView = ({ courseId, studentId, studentUsername, rollNumber 
         session={activeSession}
         courseId={courseId}
         studentId={studentId}
+        studentUsername={studentUsername}
         rollNumber={rollNumber}
         onExit={() => { setActiveSession(null); fetchSessions(); }}
       />

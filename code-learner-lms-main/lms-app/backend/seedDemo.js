@@ -693,11 +693,14 @@ async function run() {
 
 run().catch(err => {
   console.error('\n❌ Seed failed:');
-  if (err.response) {
+  if (err.code === 'ECONNREFUSED') {
+    console.error('  Cannot connect to backend — make sure it is running:');
+    console.error('  cd lms-app/backend && npm start');
+  } else if (err.response) {
     console.error('  Status:', err.response.status);
     console.error('  Body:  ', JSON.stringify(err.response.data, null, 2));
   } else {
-    console.error('  Error: ', err.message);
+    console.error('  Error: ', err.message || err);
   }
   process.exit(1);
 });
