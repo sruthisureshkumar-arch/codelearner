@@ -107,6 +107,7 @@ function App() {
 
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <Navbar
         userName={user.name}
         userRole={user.role}
@@ -116,9 +117,11 @@ function App() {
         activeCourseName={activeCourse?.name}
         onSwitchCourse={setActiveCourseCode}
       />
-      {user.role === 'teacher'
-        ? <TeacherDashboard courseId={courseId} user={user} courses={courses} activeCourseCode={activeCourseCode} onCoursesChanged={refreshCourses} onSwitchCourse={setActiveCourseCode} />
-        : <StudentDashboard courseId={courseId} user={user} courses={courses} activeCourseCode={activeCourseCode} onCoursesChanged={refreshCourses} onSwitchCourse={setActiveCourseCode} />}
+      <main id="main-content">
+        {user.role === 'teacher'
+          ? <TeacherDashboard courseId={courseId} user={user} courses={courses} activeCourseCode={activeCourseCode} onCoursesChanged={refreshCourses} onSwitchCourse={setActiveCourseCode} />
+          : <StudentDashboard courseId={courseId} user={user} courses={courses} activeCourseCode={activeCourseCode} onCoursesChanged={refreshCourses} onSwitchCourse={setActiveCourseCode} />}
+      </main>
     </div>
   );
 }

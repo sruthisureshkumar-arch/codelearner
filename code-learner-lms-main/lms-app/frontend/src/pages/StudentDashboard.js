@@ -43,7 +43,7 @@ const PLACEHOLDERS = {
 };
 
 const s = {
-  input:   { width: '100%', padding: '7px 11px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 13, boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' },
+  input:   { width: '100%', padding: '7px 11px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 13, boxSizing: 'border-box', fontFamily: 'inherit' },
   mono:    { fontFamily: 'SFMono-Regular, Consolas, monospace', fontSize: 12 },
   btnBlue: { padding: '7px 16px', background: '#0f6cbf', color: '#fff', border: 'none', borderRadius: 4, fontSize: 13, fontWeight: 500, cursor: 'pointer' },
   btnGray: { padding: '7px 16px', background: '#fff', color: '#333', border: '1px solid #ced4da', borderRadius: 4, fontSize: 13, cursor: 'pointer' },
@@ -52,17 +52,21 @@ const s = {
 /* ── SQL schema reference panel ── */
 const SqlSchemaPanel = ({ setupSql }) => {
   const [open, setOpen] = useState(true);
+  const panelId = 'sql-schema-panel';
   return (
     <div style={{ border: '1px solid #ced4da', borderRadius: 4, marginBottom: 8, overflow: 'hidden' }}>
-      <div
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
         onClick={() => setOpen(v => !v)}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: '#f0f4ff', cursor: 'pointer', userSelect: 'none' }}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: '#f0f4ff', cursor: 'pointer', border: 'none', textAlign: 'left' }}
       >
         <span style={{ fontSize: 12, fontWeight: 600, color: '#0f6cbf' }}>🗂 Table schema (auto-created before your query runs)</span>
-        <span style={{ fontSize: 12, color: '#888' }}>{open ? '▲ hide' : '▼ show'}</span>
-      </div>
+        <span style={{ fontSize: 12, color: '#555' }} aria-hidden="true">{open ? '▲ hide' : '▼ show'}</span>
+      </button>
       {open && (
-        <pre style={{ margin: 0, padding: '10px 12px', background: '#1e1e2e', color: '#a6e3a1', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', overflowX: 'auto' }}>
+        <pre id={panelId} style={{ margin: 0, padding: '10px 12px', background: '#1e1e2e', color: '#a6e3a1', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', overflowX: 'auto' }}>
           {setupSql}
         </pre>
       )}
@@ -73,11 +77,12 @@ const SqlSchemaPanel = ({ setupSql }) => {
 /* ── Per-question code editor ── */
 const CodeEditor = ({ question, studentId, studentUsername, courseId, hideTestCases: forceHide, onAttempted }) => {
   const lsKey = `code_draft_${question._id}`;
+  const sqlStarter = '-- Write your SQL query here\n';
+  const defaultCode = question.language === 'sql' ? sqlStarter : (question.placeholderCode || PLACEHOLDERS[question.language] || '');
   const [lang, setLang]         = useState(question.language || '');
   const [code, setCode]         = useState(() => {
-    // Restore auto-saved draft; fall back to placeholder
-    try { return localStorage.getItem(lsKey) || question.placeholderCode || PLACEHOLDERS[question.language] || ''; }
-    catch { return question.placeholderCode || PLACEHOLDERS[question.language] || ''; }
+    try { return localStorage.getItem(lsKey) || defaultCode; }
+    catch { return defaultCode; }
   });
   const [running, setRunning]   = useState(false);
   const [result, setResult]     = useState(null);
@@ -96,7 +101,7 @@ const CodeEditor = ({ question, studentId, studentUsername, courseId, hideTestCa
     axios.get('/api/submissions/attempts', { params: { questionId: question._id, studentUsername: studentUsername || studentId } })
       .then(r => setAttemptsLeft(Math.max(0, question.maxAttempts - r.data.count)))
       .catch(() => {});
-  }, [question._id, question.maxAttempts, studentId]);
+  }, [question._id, question.maxAttempts, studentId, studentUsername]);
 
   const runCode = async () => {
     if (!lang) { alert('Please select a language first.'); return; }
@@ -118,31 +123,39 @@ const CodeEditor = ({ question, studentId, studentUsername, courseId, hideTestCa
 
   return (
     <div style={{ padding: '14px 20px', borderTop: '1px solid #f0f0f0' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+      <div className="editor-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: '#555', textTransform: 'uppercase', letterSpacing: 0.5 }}>Your code</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <label style={{ fontSize: 12, color: '#666' }}>Language:</label>
-          <select value={lang} onChange={e => setLang(e.target.value)} style={{ ...s.input, width: 170, padding: '4px 8px', fontSize: 12 }}>
+          <label htmlFor={`lang-select-${question._id}`} style={{ fontSize: 12, color: '#555' }}>Language:</label>
+          <select id={`lang-select-${question._id}`} value={lang} onChange={e => setLang(e.target.value)} style={{ ...s.input, width: 170, padding: '4px 8px', fontSize: 12 }}>
             <option value="">— Choose —</option>
             {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
           {attemptsLeft !== null && (
-            <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: attemptsLeft > 0 ? '#fff3cd' : '#f8d7da', color: attemptsLeft > 0 ? '#856404' : '#721c24', fontWeight: 600 }}>
+            <span role="status" style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: attemptsLeft > 0 ? '#fff3cd' : '#f8d7da', color: attemptsLeft > 0 ? '#856404' : '#721c24', fontWeight: 600 }}>
               {attemptsLeft > 0 ? `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} left` : 'No attempts left'}
             </span>
           )}
-          <span style={{ fontSize: 10, color: '#aaa' }}>💾 auto-saved</span>
-          <button onClick={runCode} disabled={running || !lang || !code.trim() || attemptsLeft === 0} style={{ ...s.btnBlue, padding: '5px 16px', fontSize: 12, opacity: (running || !lang || !code.trim() || attemptsLeft === 0) ? 0.6 : 1 }}>
+          <span style={{ fontSize: 10, color: '#777' }} aria-hidden="true">💾 auto-saved</span>
+          <button onClick={() => { localStorage.removeItem(lsKey); setCode(defaultCode); }} style={{ ...s.btnGray, padding: '5px 10px', fontSize: 11 }} aria-label="Reset code to starter template">↺ Reset</button>
+          <button onClick={runCode} disabled={running || !lang || !code.trim() || attemptsLeft === 0} aria-label={running ? 'Running code…' : 'Run code'} style={{ ...s.btnBlue, padding: '5px 16px', fontSize: 12, opacity: (running || !lang || !code.trim() || attemptsLeft === 0) ? 0.6 : 1 }}>
             {running ? '⏳ Running…' : '▶ Run'}
           </button>
         </div>
       </div>
 
-      {/* SQL schema reference panel */}
+      {/* SQL schema reference panel — show only CREATE TABLE from first visible test case */}
       {lang === 'sql' && (() => {
-        const setupSql = (question.testCases || []).map(tc => tc.input).filter(Boolean).join('\n\n').trim();
-        if (!setupSql) return null;
-        return <SqlSchemaPanel setupSql={setupSql} />;
+        const visibleTc = (question.testCases || []).find(tc => !tc.isHidden && tc.input);
+        if (!visibleTc) return null;
+        // Strip INSERT INTO lines — students see table structure, not test data
+        const schemaSql = visibleTc.input
+          .split('\n')
+          .filter(line => !line.trim().toUpperCase().startsWith('INSERT'))
+          .join('\n')
+          .trim();
+        if (!schemaSql) return null;
+        return <SqlSchemaPanel setupSql={schemaSql} />;
       })()}
 
       {/* Unified code editor — pre/post locked (dimmed), middle editable */}
@@ -165,7 +178,10 @@ const CodeEditor = ({ question, studentId, studentUsername, courseId, hideTestCa
           value={code}
           onChange={e => setCode(e.target.value)}
           placeholder={lang ? (PLACEHOLDERS[lang] || '// write your solution here') : '// select a language above'}
-          style={{ ...s.mono, width: '100%', height: 140, resize: 'vertical', background: '#1e1e2e', color: '#cdd6f4', border: 'none', outline: 'none', padding: question.driverPreCode ? '2px 12px' : '10px 12px', boxSizing: 'border-box', fontSize: 13, display: 'block' }}
+          aria-label={`Code editor for ${question.title}${lang ? ` — ${LANG_LABEL[lang] || lang}` : ''}`}
+          aria-multiline="true"
+          spellCheck={false}
+          style={{ ...s.mono, width: '100%', height: 140, resize: 'vertical', background: '#1e1e2e', color: '#cdd6f4', border: 'none', padding: question.driverPreCode ? '2px 12px' : '10px 12px', boxSizing: 'border-box', fontSize: 13, display: 'block' }}
         />
 
         {/* Post-code — dimmed, not selectable */}
@@ -177,7 +193,7 @@ const CodeEditor = ({ question, studentId, studentUsername, courseId, hideTestCa
       </div>
 
       {result && (
-        <div style={{ marginTop: 14 }}>
+        <div role="alert" aria-live="polite" style={{ marginTop: 14 }}>
           {result.executionError && (
             <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 4, padding: '10px 14px', marginBottom: 10, fontSize: 13 }}>
               <strong>⚠ Execution error:</strong>
@@ -205,10 +221,13 @@ const CodeEditor = ({ question, studentId, studentUsername, courseId, hideTestCa
                       {isVerdict && <span style={{ fontSize: 12, fontWeight: 600, color: tr.passed ? '#155724' : '#721c24' }}>{tr.passed ? '✓ Passed' : '✗ Failed'}</span>}
                     </div>
                     {!tr.isHidden && !hideTC && (
-                      <div style={{ display: 'grid', gridTemplateColumns: isVerdict ? '1fr 1fr' : '1fr', gap: 8, fontSize: 12 }}>
+                      <div className="test-grid" style={{ display: 'grid', gridTemplateColumns: isVerdict ? '1fr 1fr' : '1fr', gap: 8, fontSize: 12 }}>
                         {isVerdict && (
                           <>
-                            <div><div style={{ color: '#888', marginBottom: 2 }}>Input</div><pre style={{ ...s.mono, background: '#f8f9fa', padding: '6px 8px', borderRadius: 3, margin: 0, whiteSpace: 'pre-wrap' }}>{tr.input || '(none)'}</pre></div>
+                            {/* For SQL, input is just table setup SQL — don't show it to students at all */}
+                            {question.language !== 'sql' && (
+                              <div><div style={{ color: '#888', marginBottom: 2 }}>Input</div><pre style={{ ...s.mono, background: '#f8f9fa', padding: '6px 8px', borderRadius: 3, margin: 0, whiteSpace: 'pre-wrap' }}>{tr.input || '(none)'}</pre></div>
+                            )}
                             <div><div style={{ color: '#888', marginBottom: 2 }}>Expected</div><pre style={{ ...s.mono, background: '#f8f9fa', padding: '6px 8px', borderRadius: 3, margin: 0, whiteSpace: 'pre-wrap' }}>{tr.expectedOutput || '(any)'}</pre></div>
                           </>
                         )}
@@ -588,18 +607,20 @@ const Sidebar = ({ active, setActive, studentName, activeCourse }) => {
     { id: 'courses',  label: 'My courses',      icon: '🏫' },
   ];
   return (
-    <div style={{ width: 220, background: 'white', borderRight: '1px solid #dee2e6', minHeight: 'calc(100vh - 52px)', flexShrink: 0 }}>
+    <nav aria-label="Dashboard navigation" style={{ width: 220, background: 'white', borderRight: '1px solid #dee2e6', minHeight: 'calc(100vh - 52px)', flexShrink: 0 }}>
       <div style={{ padding: '16px 16px 8px', fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.8 }}>Navigation</div>
       {items.map(item => (
-        <button key={item.id} onClick={() => setActive(item.id)} style={{
-          display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px',
-          background: active === item.id ? '#e8f0fb' : 'transparent',
-          borderLeft: active === item.id ? '4px solid #0f6cbf' : '4px solid transparent',
-          border: 'none', cursor: 'pointer', fontSize: 14,
-          color: active === item.id ? '#0f6cbf' : '#333',
-          fontWeight: active === item.id ? 500 : 400, textAlign: 'left',
-        }}>
-          <span>{item.icon}</span>{item.label}
+        <button key={item.id} onClick={() => setActive(item.id)}
+          aria-current={active === item.id ? 'page' : undefined}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px',
+            background: active === item.id ? '#e8f0fb' : 'transparent',
+            borderLeft: active === item.id ? '4px solid #0f6cbf' : '4px solid transparent',
+            border: 'none', cursor: 'pointer', fontSize: 14,
+            color: active === item.id ? '#0f6cbf' : '#333',
+            fontWeight: active === item.id ? 500 : 400, textAlign: 'left',
+          }}>
+          <span aria-hidden="true">{item.icon}</span>{item.label}
         </button>
       ))}
       <div style={{ margin: '12px 12px', borderTop: '1px solid #dee2e6' }} />
@@ -616,7 +637,7 @@ const Sidebar = ({ active, setActive, studentName, activeCourse }) => {
         <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Logged in as</div>
         <div style={{ fontSize: 13, fontWeight: 500, color: '#333' }}>{studentName}</div>
       </div>
-    </div>
+    </nav>
   );
 };
 

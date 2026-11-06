@@ -12,6 +12,7 @@ const courseRoutes      = require('./routes/courseRoutes');
 const sessionRoutes     = require('./routes/sessionRoutes');
 
 const app = express();
+app.set('trust proxy', 1); // needed for rate-limiter behind proxies / dev server
 
 // CORS — allow the frontend origin (set FRONTEND_URL in .env)
 const allowedOrigins = (process.env.FRONTEND_URL || '')

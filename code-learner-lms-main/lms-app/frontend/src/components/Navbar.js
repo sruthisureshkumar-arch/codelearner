@@ -2,9 +2,9 @@ import React from 'react';
 
 const Navbar = ({ userName, userRole, onLogout, courses = [], activeCourseCode, activeCourseName, onSwitchCourse }) => {
   return (
-    <div style={{ background: '#0f6cbf', padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', position: 'sticky', top: 0, zIndex: 100 }}>
+    <header className="dash-header" style={{ background: '#0f6cbf', padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 4px rgba(0,0,0,0.15)', position: 'sticky', top: 0, zIndex: 100 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
           <rect width="100" height="100" rx="8" fill="white" fillOpacity="0.2"/>
           <text x="50" y="68" textAnchor="middle" fontSize="52" fontWeight="bold" fill="white">M</text>
         </svg>
@@ -15,9 +15,10 @@ const Navbar = ({ userName, userRole, onLogout, courses = [], activeCourseCode, 
             value={activeCourseCode || ''}
             onChange={(e) => onSwitchCourse && onSwitchCourse(e.target.value)}
             title="Switch active course"
+            aria-label="Switch active course"
             style={{
               background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: 4, fontSize: 13, padding: '4px 8px', cursor: 'pointer', outline: 'none',
+              borderRadius: 4, fontSize: 13, padding: '4px 8px', cursor: 'pointer',
             }}
           >
             {courses.map((c) => (
@@ -50,7 +51,7 @@ const Navbar = ({ userName, userRole, onLogout, courses = [], activeCourseCode, 
           Log out
         </button>
       </div>
-    </div>
+    </header>
   );
 };
 

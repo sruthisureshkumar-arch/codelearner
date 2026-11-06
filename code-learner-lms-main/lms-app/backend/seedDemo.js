@@ -422,11 +422,11 @@ const SESSION3_QUESTIONS = [
 -- Return: name, grade — sorted by grade DESC
 SELECT name, grade
 FROM students
-WHERE grade > 80
-ORDER BY grade DESC;`,
+WHERE /* TODO: add your condition here */
+ORDER BY /* TODO: add sort order */;`,
     driverPostCode: '',
     answer: `SELECT name, grade\nFROM students\nWHERE grade > 80\nORDER BY grade DESC;`,
-    isAnswerVisible: true,
+    isAnswerVisible: false,
     hideTestCases: false,
     testCases: [
       {
@@ -472,13 +472,12 @@ INSERT INTO students VALUES (2, 'Bob',   65);`,
     difficulty: 'medium',
     driverPreCode: '',
     placeholderCode:
-`-- Join customers and orders
--- Return: name, amount where amount > 100, sorted by amount DESC
-SELECT c.name, o.amount
-FROM customers c
-JOIN orders o ON c.id = o.customer_id
-WHERE o.amount > 100
-ORDER BY o.amount DESC;`,
+`-- Write your JOIN query here
+SELECT ...
+FROM ...
+JOIN ... ON ...
+WHERE ...
+ORDER BY ...;`,
     driverPostCode: '',
     answer: `SELECT c.name, o.amount\nFROM customers c\nJOIN orders o ON c.id = o.customer_id\nWHERE o.amount > 100\nORDER BY o.amount DESC;`,
     isAnswerVisible: false,
@@ -532,11 +531,11 @@ INSERT INTO orders VALUES (2, 1, 30);`,
     difficulty: 'medium',
     driverPreCode: '',
     placeholderCode:
-`-- Return: product, total (SUM of amount) grouped by product, sorted by product ASC
-SELECT product, SUM(amount) AS total
+`-- Write your GROUP BY query here
+SELECT ..., ...
 FROM sales
-GROUP BY product
-ORDER BY product ASC;`,
+GROUP BY ...
+ORDER BY ...;`,
     driverPostCode: '',
     answer: `SELECT product, SUM(amount) AS total\nFROM sales\nGROUP BY product\nORDER BY product ASC;`,
     isAnswerVisible: false,

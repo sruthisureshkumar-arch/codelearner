@@ -17,7 +17,7 @@ const COURSE_PATTERNS = [
 
 const s = {
   label:    { display: 'block', fontSize: 13, fontWeight: 500, color: '#333', marginBottom: 5 },
-  input:    { width: '100%', padding: '7px 11px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 13, boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' },
+  input:    { width: '100%', padding: '7px 11px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 13, boxSizing: 'border-box', fontFamily: 'inherit' },
   mono:     { fontFamily: 'SFMono-Regular, Consolas, monospace', fontSize: 13 },
   btnBlue:  { padding: '7px 16px', background: '#0f6cbf', color: '#fff', border: 'none', borderRadius: 4, fontSize: 13, fontWeight: 500, cursor: 'pointer' },
   btnGray:  { padding: '7px 16px', background: '#fff', color: '#333', border: '1px solid #ced4da', borderRadius: 4, fontSize: 13, cursor: 'pointer' },
@@ -81,21 +81,24 @@ const Sidebar = ({ active, setActive, activeCourse }) => {
     { id: 'courses',     label: 'My courses',          icon: '🏫', requiresCourse: false },
   ];
   return (
-    <div style={{ width: 220, background: '#fff', borderRight: '1px solid #dee2e6', minHeight: 'calc(100vh - 52px)', flexShrink: 0 }}>
+    <nav aria-label="Dashboard navigation" style={{ width: 220, background: '#fff', borderRight: '1px solid #dee2e6', minHeight: 'calc(100vh - 52px)', flexShrink: 0 }}>
       <div style={{ padding: '16px 16px 8px', fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.8 }}>Navigation</div>
       {items.map(item => {
         const disabled = item.requiresCourse && !activeCourse;
         return (
-          <button key={item.id} onClick={() => !disabled && setActive(item.id)} style={{
-            display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px',
-            background: active === item.id ? '#e8f0fb' : 'transparent',
-            borderLeft: active === item.id ? '4px solid #0f6cbf' : '4px solid transparent',
-            border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 14,
-            color: active === item.id ? '#0f6cbf' : '#333',
-            fontWeight: active === item.id ? 500 : 400, textAlign: 'left',
-            opacity: disabled ? 0.38 : 1,
-          }}>
-            <span>{item.icon}</span>{item.label}
+          <button key={item.id} onClick={() => !disabled && setActive(item.id)}
+            aria-current={active === item.id ? 'page' : undefined}
+            aria-disabled={disabled}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px',
+              background: active === item.id ? '#e8f0fb' : 'transparent',
+              borderLeft: active === item.id ? '4px solid #0f6cbf' : '4px solid transparent',
+              border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 14,
+              color: active === item.id ? '#0f6cbf' : '#333',
+              fontWeight: active === item.id ? 500 : 400, textAlign: 'left',
+              opacity: disabled ? 0.38 : 1,
+            }}>
+            <span aria-hidden="true">{item.icon}</span>{item.label}
           </button>
         );
       })}
@@ -118,7 +121,7 @@ const Sidebar = ({ active, setActive, activeCourse }) => {
           </>
         )}
       </div>
-    </div>
+    </nav>
   );
 };
 
@@ -394,25 +397,25 @@ const QuestionCard = ({ q, index, onUpdate, onToggleVisibility, onRemove, sessio
 
           {/* Pre-code (locked) */}
           <div style={{ marginBottom: 10 }}>
-            <label style={{ ...s.label, color: '#666' }}>🔒 Pre-code <span style={{ fontWeight: 400, color: '#888' }}>(locked — shown above student's editor)</span></label>
-            <textarea value={preCode} onChange={e => setPreCode(e.target.value)} style={{ ...s.input, ...s.mono, height: 100, resize: 'vertical', background: '#f0f0f0', color: '#555' }} placeholder={`e.g. #include <stdio.h>\nint main() {\n    int a, b;\n    scanf("%d %d", &a, &b);`} />
+            <label htmlFor={`pre-code-${q._id}`} style={{ ...s.label, color: '#666' }}>🔒 Pre-code <span style={{ fontWeight: 400, color: '#888' }}>(locked — shown above student's editor)</span></label>
+            <textarea id={`pre-code-${q._id}`} value={preCode} onChange={e => setPreCode(e.target.value)} style={{ ...s.input, ...s.mono, height: 100, resize: 'vertical', background: '#f0f0f0', color: '#555' }} placeholder={`e.g. #include <stdio.h>\nint main() {\n    int a, b;\n    scanf("%d %d", &a, &b);`} />
           </div>
 
           {/* Student placeholder code */}
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-              <label style={{ ...s.label, marginBottom: 0 }}>✏️ Student code <span style={{ fontWeight: 400, color: '#888' }}>(editable — student's starting point)</span></label>
-              <button onClick={generateAI} disabled={aiLoading} style={{ ...s.btnGray, padding: '4px 10px', fontSize: 12 }}>
+              <label htmlFor={`student-code-${q._id}`} style={{ ...s.label, marginBottom: 0 }}>✏️ Student code <span style={{ fontWeight: 400, color: '#888' }}>(editable — student's starting point)</span></label>
+              <button onClick={generateAI} disabled={aiLoading} style={{ ...s.btnGray, padding: '4px 10px', fontSize: 12 }} aria-label="Generate starter code with AI">
                 {aiLoading ? '⏳ Generating…' : '✨ Generate with AI'}
               </button>
             </div>
-            <textarea value={placeholder} onChange={e => setPlaceholder(e.target.value)} style={{ ...s.input, ...s.mono, height: 120, resize: 'vertical' }} placeholder={PLACEHOLDERS[language] || '// starter code'} />
+            <textarea id={`student-code-${q._id}`} value={placeholder} onChange={e => setPlaceholder(e.target.value)} style={{ ...s.input, ...s.mono, height: 120, resize: 'vertical' }} placeholder={PLACEHOLDERS[language] || '// starter code'} />
           </div>
 
           {/* Post-code (locked) */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ ...s.label, color: '#666' }}>🔒 Post-code <span style={{ fontWeight: 400, color: '#888' }}>(locked — shown below student's editor)</span></label>
-            <textarea value={postCode} onChange={e => setPostCode(e.target.value)} style={{ ...s.input, ...s.mono, height: 80, resize: 'vertical', background: '#f0f0f0', color: '#555' }} placeholder={`e.g.     return 0;\n}`} />
+            <label htmlFor={`post-code-${q._id}`} style={{ ...s.label, color: '#666' }}>🔒 Post-code <span style={{ fontWeight: 400, color: '#888' }}>(locked — shown below student's editor)</span></label>
+            <textarea id={`post-code-${q._id}`} value={postCode} onChange={e => setPostCode(e.target.value)} style={{ ...s.input, ...s.mono, height: 80, resize: 'vertical', background: '#f0f0f0', color: '#555' }} placeholder={`e.g.     return 0;\n}`} />
           </div>
 
           <button onClick={savePlaceholder} disabled={saving} style={s.btnBlue}>{saving ? 'Saving…' : 'Save'}</button>
@@ -607,6 +610,7 @@ const GradebookView = ({ courseId }) => {
                 document.body.removeChild(a); URL.revokeObjectURL(url);
               } catch(e) { alert('Export failed: ' + (e.response?.data?.error || e.message)); }
             }}
+            aria-label="Export gradebook as CSV"
             style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
           >
             ⬇ Export CSV
@@ -736,7 +740,7 @@ const PoolPickerModal = ({ courseId, sessionQuestionIds, onAdd, onClose }) => {
       <div style={{ background: '#fff', borderRadius: 8, width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
         <div style={{ background: '#0f6cbf', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px 8px 0 0' }}>
           <div style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>📦 Add from Question Pool</div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', cursor: 'pointer' }}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', cursor: 'pointer' }}>✕</button>
         </div>
         <div style={{ overflowY: 'auto', flex: 1, padding: 16 }}>
           {loading ? <div style={{ textAlign: 'center', padding: 30, color: '#666' }}>Loading pool…</div>
@@ -813,7 +817,7 @@ const RandomizeModal = ({ sessionId, courseId, onDone, onClose }) => {
       <div style={{ background: '#fff', borderRadius: 8, width: 460, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ background: '#0f6cbf', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '8px 8px 0 0', flexShrink: 0 }}>
           <div style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>🎲 Randomize from Pool</div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', cursor: 'pointer' }}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '6px 14px', cursor: 'pointer' }}>✕</button>
         </div>
         <div style={{ padding: 20, overflowY: 'auto' }}>
           {/* Mode toggle */}
